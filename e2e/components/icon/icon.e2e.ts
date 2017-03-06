@@ -1,3 +1,6 @@
+import {browser, by, element} from 'protractor';
+import {screenshot} from '../../screenshot';
+
 describe('icon', () => {
   describe('font icons by ligature', () => {
     let testIcon: any;
@@ -11,6 +14,7 @@ describe('icon', () => {
       testIcon.getAttribute('aria-label').then((attr: string) => {
         expect(attr).toEqual('favorite');
       });
+      screenshot();
     });
 
     it('should have the correct class when used', () => {

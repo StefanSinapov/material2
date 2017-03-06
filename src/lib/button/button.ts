@@ -6,23 +6,86 @@ import {
   ChangeDetectionStrategy,
   ElementRef,
   Renderer,
-  NgModule,
-  ModuleWithProviders,
+  Directive,
 } from '@angular/core';
-import {CommonModule} from '@angular/common';
-import {MdRippleModule, coerceBooleanProperty} from '../core';
+import {coerceBooleanProperty} from '../core';
+
 
 // TODO(jelbourn): Make the `isMouseDown` stuff done with one global listener.
 // TODO(kara): Convert attribute selectors to classes when attr maps become available
 
 
+/**
+ * Directive whose purpose is to add the mat- CSS styling to this selector.
+ */
+@Directive({
+  selector: 'button[md-button], button[mat-button], a[md-button], a[mat-button]',
+  host: {
+    '[class.mat-button]': 'true'
+  }
+})
+export class MdButtonCssMatStyler {}
+
+/**
+ * Directive whose purpose is to add the mat- CSS styling to this selector.
+ */
+@Directive({
+  selector:
+      'button[md-raised-button], button[mat-raised-button], ' +
+      'a[md-raised-button], a[mat-raised-button]',
+  host: {
+    '[class.mat-raised-button]': 'true'
+  }
+})
+export class MdRaisedButtonCssMatStyler {}
+
+/**
+ * Directive whose purpose is to add the mat- CSS styling to this selector.
+ */
+@Directive({
+  selector:
+      'button[md-icon-button], button[mat-icon-button], a[md-icon-button], a[mat-icon-button]',
+  host: {
+    '[class.mat-icon-button]': 'true',
+  }
+})
+export class MdIconButtonCssMatStyler {}
+
+/**
+ * Directive whose purpose is to add the mat- CSS styling to this selector.
+ */
+@Directive({
+  selector: 'button[md-fab], button[mat-fab], a[md-fab], a[mat-fab]',
+  host: {
+    '[class.mat-fab]': 'true'
+  }
+})
+export class MdFabCssMatStyler {}
+
+/**
+ * Directive whose purpose is to add the mat- CSS styling to this selector.
+ */
+@Directive({
+  selector: 'button[md-mini-fab], button[mat-mini-fab], a[md-mini-fab], a[mat-mini-fab]',
+  host: {
+    '[class.mat-mini-fab]': 'true'
+  }
+})
+export class MdMiniFabCssMatStyler {}
+
+
+/**
+ * Material design button.
+ */
 @Component({
   moduleId: module.id,
-  selector: 'button[md-button], button[md-raised-button], button[md-icon-button], ' +
-            'button[md-fab], button[md-mini-fab]',
+  selector: 'button[md-button], button[md-raised-button], button[md-icon-button],' +
+            'button[md-fab], button[md-mini-fab],' +
+            'button[mat-button], button[mat-raised-button], button[mat-icon-button],' +
+            'button[mat-fab], button[mat-mini-fab]',
   host: {
     '[disabled]': 'disabled',
-    '[class.md-button-focus]': '_isKeyboardFocused',
+    '[class.mat-button-focus]': '_isKeyboardFocused',
     '(mousedown)': '_setMousedown()',
     '(focus)': '_setKeyboardFocus()',
     '(blur)': '_removeKeyboardFocus()',
@@ -41,28 +104,32 @@ export class MdButton {
   /** Whether a mousedown has occurred on this element in the last 100ms. */
   _isMouseDown: boolean = false;
 
+  /** Whether the button is round. */
+  _isRoundButton: boolean = ['icon-button', 'fab', 'mini-fab'].some(suffix => {
+    let el = this._getHostElement();
+    return el.hasAttribute('md-' + suffix) || el.hasAttribute('mat-' + suffix);
+  });
+
   /** Whether the ripple effect on click should be disabled. */
   private _disableRipple: boolean = false;
-  private _disabled: boolean = false;
+  private _disabled: boolean = null;
 
+  /** Whether the ripple effect for this button is disabled. */
   @Input()
   get disableRipple() { return this._disableRipple; }
   set disableRipple(v) { this._disableRipple = coerceBooleanProperty(v); }
 
+  /** Whether the button is disabled. */
   @Input()
   get disabled() { return this._disabled; }
-  set disabled(value: boolean) { this._disabled = coerceBooleanProperty(value); }
+  set disabled(value: boolean) { this._disabled = coerceBooleanProperty(value) ? true : null; }
 
   constructor(private _elementRef: ElementRef, private _renderer: Renderer) { }
 
+  /** The color of the button. Can be `primary`, `accent`, or `warn`. */
   @Input()
-  get color(): string {
-    return this._color;
-  }
-
-  set color(value: string) {
-    this._updateColor(value);
-  }
+  get color(): string { return this._color; }
+  set color(value: string) { this._updateColor(value); }
 
   _setMousedown() {
     // We only *show* the focus style when focus has come to the button via the keyboard.
@@ -81,7 +148,7 @@ export class MdButton {
 
   _setElementColor(color: string, isAdd: boolean) {
     if (color != null && color != '') {
-      this._renderer.setElementClass(this._elementRef.nativeElement, `md-${color}`, isAdd);
+      this._renderer.setElementClass(this._getHostElement(), `mat-${color}`, isAdd);
     }
   }
 
@@ -93,20 +160,13 @@ export class MdButton {
     this._isKeyboardFocused = false;
   }
 
-  /** TODO(hansl): e2e test this function. */
-  focus() {
-    this._elementRef.nativeElement.focus();
+  /** Focuses the button. */
+  focus(): void {
+    this._renderer.invokeElementMethod(this._getHostElement(), 'focus');
   }
 
-  getHostElement() {
+  _getHostElement() {
     return this._elementRef.nativeElement;
-  }
-
-  isRoundButton() {
-    const el = this._elementRef.nativeElement;
-    return el.hasAttribute('md-icon-button') ||
-        el.hasAttribute('md-fab') ||
-        el.hasAttribute('md-mini-fab');
   }
 
   _isRippleDisabled() {
@@ -114,13 +174,17 @@ export class MdButton {
   }
 }
 
+/**
+ * Raised Material design button.
+ */
 @Component({
   moduleId: module.id,
-  selector: 'a[md-button], a[md-raised-button], a[md-icon-button], a[md-fab], a[md-mini-fab]',
-  inputs: ['color', 'disabled', 'disableRipple'],
+  selector: `a[md-button], a[md-raised-button], a[md-icon-button], a[md-fab], a[md-mini-fab],
+             a[mat-button], a[mat-raised-button], a[mat-icon-button], a[mat-fab], a[mat-mini-fab]`,
   host: {
     '[attr.disabled]': 'disabled',
-    '[class.md-button-focus]': '_isKeyboardFocused',
+    '[attr.aria-disabled]': '_isAriaDisabled',
+    '[class.mat-button-focus]': '_isKeyboardFocused',
     '(mousedown)': '_setMousedown()',
     '(focus)': '_setKeyboardFocus()',
     '(blur)': '_removeKeyboardFocus()',
@@ -135,14 +199,13 @@ export class MdAnchor extends MdButton {
     super(elementRef, renderer);
   }
 
+  /** @docs-private */
   @HostBinding('tabIndex')
   get tabIndex(): number {
     return this.disabled ? -1 : 0;
   }
 
-  @HostBinding('attr.aria-disabled')
-  /** Gets the aria-disabled value for the component, which must be a string for Dart. */
-  get isAriaDisabled(): string {
+  get _isAriaDisabled(): string {
     return this.disabled ? 'true' : 'false';
   }
 
@@ -152,20 +215,5 @@ export class MdAnchor extends MdButton {
       event.preventDefault();
       event.stopImmediatePropagation();
     }
-  }
-}
-
-
-@NgModule({
-  imports: [CommonModule, MdRippleModule],
-  exports: [MdButton, MdAnchor],
-  declarations: [MdButton, MdAnchor],
-})
-export class MdButtonModule {
-  static forRoot(): ModuleWithProviders {
-    return {
-      ngModule: MdButtonModule,
-      providers: []
-    };
   }
 }

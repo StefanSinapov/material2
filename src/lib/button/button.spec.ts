@@ -1,7 +1,9 @@
 import {async, TestBed, ComponentFixture} from '@angular/core/testing';
 import {Component} from '@angular/core';
 import {By} from '@angular/platform-browser';
-import {MdButtonModule} from './button';
+import {MdButtonModule} from './index';
+import {ViewportRuler} from '../core/overlay/position/viewport-ruler';
+import {FakeViewportRuler} from '../core/overlay/position/fake-viewport-ruler';
 
 
 describe('MdButton', () => {
@@ -10,6 +12,9 @@ describe('MdButton', () => {
     TestBed.configureTestingModule({
       imports: [MdButtonModule.forRoot()],
       declarations: [TestApp],
+      providers: [
+        {provide: ViewportRuler, useClass: FakeViewportRuler},
+      ]
     });
 
     TestBed.compileComponents();
@@ -25,13 +30,13 @@ describe('MdButton', () => {
 
     testComponent.buttonColor = 'primary';
     fixture.detectChanges();
-    expect(buttonDebugElement.nativeElement.classList.contains('md-primary')).toBe(true);
-    expect(aDebugElement.nativeElement.classList.contains('md-primary')).toBe(true);
+    expect(buttonDebugElement.nativeElement.classList.contains('mat-primary')).toBe(true);
+    expect(aDebugElement.nativeElement.classList.contains('mat-primary')).toBe(true);
 
     testComponent.buttonColor = 'accent';
     fixture.detectChanges();
-    expect(buttonDebugElement.nativeElement.classList.contains('md-accent')).toBe(true);
-    expect(aDebugElement.nativeElement.classList.contains('md-accent')).toBe(true);
+    expect(buttonDebugElement.nativeElement.classList.contains('mat-accent')).toBe(true);
+    expect(aDebugElement.nativeElement.classList.contains('mat-accent')).toBe(true);
   });
 
   it('should should not clear previous defined classes', () => {
@@ -44,14 +49,14 @@ describe('MdButton', () => {
     testComponent.buttonColor = 'primary';
     fixture.detectChanges();
 
-    expect(buttonDebugElement.nativeElement.classList.contains('md-primary')).toBe(true);
+    expect(buttonDebugElement.nativeElement.classList.contains('mat-primary')).toBe(true);
     expect(buttonDebugElement.nativeElement.classList.contains('custom-class')).toBe(true);
 
     testComponent.buttonColor = 'accent';
     fixture.detectChanges();
 
-    expect(buttonDebugElement.nativeElement.classList.contains('md-primary')).toBe(false);
-    expect(buttonDebugElement.nativeElement.classList.contains('md-accent')).toBe(true);
+    expect(buttonDebugElement.nativeElement.classList.contains('mat-primary')).toBe(false);
+    expect(buttonDebugElement.nativeElement.classList.contains('mat-accent')).toBe(true);
     expect(buttonDebugElement.nativeElement.classList.contains('custom-class')).toBe(true);
 
   });
@@ -127,6 +132,24 @@ describe('MdButton', () => {
       fixture.detectChanges();
       expect(buttonDebugElement.nativeElement.getAttribute('aria-disabled')).toBe('true');
     });
+
+    it('should not add aria-disabled attribute if disabled is false', () => {
+      let fixture = TestBed.createComponent(TestApp);
+      let testComponent = fixture.debugElement.componentInstance;
+      let buttonDebugElement = fixture.debugElement.query(By.css('a'));
+      fixture.detectChanges();
+      expect(buttonDebugElement.nativeElement.getAttribute('aria-disabled'))
+        .toBe('false', 'Expect aria-disabled="false"');
+      expect(buttonDebugElement.nativeElement.getAttribute('disabled'))
+        .toBeNull('Expect disabled="false"');
+
+      testComponent.isDisabled = false;
+      fixture.detectChanges();
+      expect(buttonDebugElement.nativeElement.getAttribute('aria-disabled'))
+        .toBe('false', 'Expect no aria-disabled');
+      expect(buttonDebugElement.nativeElement.getAttribute('disabled'))
+        .toBeNull('Expect no disabled');
+    });
   });
 
   // Ripple tests.
@@ -145,7 +168,7 @@ describe('MdButton', () => {
       anchorElement = fixture.nativeElement.querySelector('a[md-button]');
     });
 
-    it('should remove ripple if md-ripple-disabled input is set', () => {
+    it('should remove ripple if mdRippleDisabled input is set', () => {
       expect(buttonElement.querySelectorAll('[md-ripple]').length).toBe(1);
 
       testComponent.rippleDisabled = true;

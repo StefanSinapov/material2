@@ -8,7 +8,10 @@ import {
   transition,
   animate,
   AnimationTransitionEvent,
-  NgZone
+  NgZone,
+  OnDestroy,
+  Renderer,
+  ElementRef,
 } from '@angular/core';
 import {
   BasePortalHost,
@@ -32,6 +35,7 @@ export const HIDE_ANIMATION = '195ms cubic-bezier(0.0,0.0,0.2,1)';
 
 /**
  * Internal component that wraps user-provided snack bar content.
+ * @docs-private
  */
 @Component({
   moduleId: module.id,
@@ -41,7 +45,7 @@ export const HIDE_ANIMATION = '195ms cubic-bezier(0.0,0.0,0.2,1)';
   host: {
     'role': 'alert',
     '[@state]': 'animationState',
-    '(@state.done)': 'markAsExited($event)'
+    '(@state.done)': 'onAnimationEnd($event)'
   },
   animations: [
     trigger('state', [
@@ -53,12 +57,15 @@ export const HIDE_ANIMATION = '195ms cubic-bezier(0.0,0.0,0.2,1)';
     ])
   ],
 })
-export class MdSnackBarContainer extends BasePortalHost {
+export class MdSnackBarContainer extends BasePortalHost implements OnDestroy {
   /** The portal host inside of this container into which the snack bar content will be loaded. */
   @ViewChild(PortalHostDirective) _portalHost: PortalHostDirective;
 
   /** Subject for notifying that the snack bar has exited from view. */
-  private _onExit: Subject<any> = new Subject();
+  private onExit: Subject<any> = new Subject();
+
+  /** Subject for notifying that the snack bar has finished entering the view. */
+  private onEnter: Subject<any> = new Subject();
 
   /** The state of the snack bar animations. */
   animationState: SnackBarState = 'initial';
@@ -66,7 +73,10 @@ export class MdSnackBarContainer extends BasePortalHost {
   /** The snack bar configuration. */
   snackBarConfig: MdSnackBarConfig;
 
-  constructor(private _ngZone: NgZone) {
+  constructor(
+    private _ngZone: NgZone,
+    private _renderer: Renderer,
+    private _elementRef: ElementRef) {
     super();
   }
 
@@ -74,6 +84,14 @@ export class MdSnackBarContainer extends BasePortalHost {
   attachComponentPortal<T>(portal: ComponentPortal<T>): ComponentRef<T> {
     if (this._portalHost.hasAttached()) {
       throw new MdSnackBarContentAlreadyAttached();
+    }
+
+    if (this.snackBarConfig.extraClasses) {
+      // Not the most efficient way of adding classes, but the renderer doesn't allow us
+      // to pass in an array or a space-separated list.
+      for (let cssClass of this.snackBarConfig.extraClasses) {
+        this._renderer.setElementClass(this._elementRef.nativeElement, cssClass, true);
+      }
     }
 
     return this._portalHost.attachComponentPortal(portal);
@@ -84,18 +102,16 @@ export class MdSnackBarContainer extends BasePortalHost {
     throw Error('Not yet implemented');
   }
 
-  /** Begin animation of the snack bar exiting from view. */
-  exit(): Observable<void> {
-    this.animationState = 'complete';
-    return this._onExit.asObservable();
-  }
-
-  /** Mark snack bar as exited from the view. */
-  markAsExited(event: AnimationTransitionEvent) {
+  /** Handle end of animations, updating the state of the snackbar. */
+  onAnimationEnd(event: AnimationTransitionEvent) {
     if (event.toState === 'void' || event.toState === 'complete') {
+      this._completeExit();
+    }
+
+    if (event.toState === 'visible') {
       this._ngZone.run(() => {
-        this._onExit.next();
-        this._onExit.complete();
+        this.onEnter.next();
+        this.onEnter.complete();
       });
     }
   }
@@ -103,5 +119,40 @@ export class MdSnackBarContainer extends BasePortalHost {
   /** Begin animation of snack bar entrance into view. */
   enter(): void {
     this.animationState = 'visible';
+  }
+
+  /** Returns an observable resolving when the enter animation completes.  */
+  _onEnter(): Observable<void> {
+    this.animationState = 'visible';
+    return this.onEnter.asObservable();
+  }
+
+  /** Begin animation of the snack bar exiting from view. */
+  exit(): Observable<void> {
+    this.animationState = 'complete';
+    return this._onExit();
+  }
+
+  /** Returns an observable that completes after the closing animation is done. */
+  _onExit(): Observable<void> {
+    return this.onExit.asObservable();
+  }
+
+  /**
+   * Makes sure the exit callbacks have been invoked when the element is destroyed.
+   */
+  ngOnDestroy() {
+    this._completeExit();
+  }
+
+  /**
+   * Waits for the zone to settle before removing the element. Helps prevent
+   * errors where we end up removing an element which is in the middle of an animation.
+   */
+  private _completeExit() {
+    this._ngZone.onMicrotaskEmpty.first().subscribe(() => {
+      this.onExit.next();
+      this.onExit.complete();
+    });
   }
 }

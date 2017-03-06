@@ -1,33 +1,108 @@
-import {Component, ViewEncapsulation, ViewChild, ElementRef} from '@angular/core';
+import {
+  Directive,
+  ElementRef,
+  Input,
+  NgZone,
+  OnDestroy,
+  AfterContentInit,
+  Injectable,
+} from '@angular/core';
 import {InteractivityChecker} from './interactivity-checker';
+import {coerceBooleanProperty} from '../coercion/boolean-property';
 
 
 /**
- * Directive for trapping focus within a region.
+ * Class that allows for trapping focus within a DOM element.
  *
- * NOTE: This directive currently uses a very simple (naive) approach to focus trapping.
+ * NOTE: This class currently uses a very simple (naive) approach to focus trapping.
  * It assumes that the tab order is the same as DOM order, which is not necessarily true.
  * Things like tabIndex > 0, flex `order`, and shadow roots can cause to two to misalign.
  * This will be replaced with a more intelligent solution before the library is considered stable.
  */
-@Component({
-  moduleId: module.id,
-  selector: 'focus-trap',
-  // TODO(jelbourn): move this to a separate file.
-  template: `
-  <div tabindex="0" (focus)="focusLastTabbableElement()"></div>
-  <div #trappedContent><ng-content></ng-content></div>
-  <div tabindex="0" (focus)="focusFirstTabbableElement()"></div>`,
-  encapsulation: ViewEncapsulation.None,
-})
 export class FocusTrap {
-  @ViewChild('trappedContent') trappedContent: ElementRef;
+  private _startAnchor: HTMLElement;
+  private _endAnchor: HTMLElement;
 
-  constructor(private _checker: InteractivityChecker) { }
+  /** Whether the focus trap is active. */
+  get enabled(): boolean { return this._enabled; }
+  set enabled(val: boolean) {
+    this._enabled = val;
+
+    if (this._startAnchor && this._endAnchor) {
+      this._startAnchor.tabIndex = this._endAnchor.tabIndex = this._enabled ? 0 : -1;
+    }
+  }
+  private _enabled: boolean = true;
+
+  constructor(
+    private _element: HTMLElement,
+    private _checker: InteractivityChecker,
+    private _ngZone: NgZone,
+    deferAnchors = false) {
+
+    if (!deferAnchors) {
+      this.attachAnchors();
+    }
+  }
+
+  /** Destroys the focus trap by cleaning up the anchors. */
+  destroy() {
+    if (this._startAnchor && this._startAnchor.parentNode) {
+      this._startAnchor.parentNode.removeChild(this._startAnchor);
+    }
+
+    if (this._endAnchor && this._endAnchor.parentNode) {
+      this._endAnchor.parentNode.removeChild(this._endAnchor);
+    }
+
+    this._startAnchor = this._endAnchor = null;
+  }
+
+  /**
+   * Inserts the anchors into the DOM. This is usually done automatically
+   * in the constructor, but can be deferred for cases like directives with `*ngIf`.
+   */
+  attachAnchors(): void {
+    if (!this._startAnchor) {
+      this._startAnchor = this._createAnchor();
+    }
+
+    if (!this._endAnchor) {
+      this._endAnchor = this._createAnchor();
+    }
+
+    this._ngZone.runOutsideAngular(() => {
+      this._element
+        .insertAdjacentElement('beforebegin', this._startAnchor)
+        .addEventListener('focus', () => this.focusLastTabbableElement());
+
+      this._element
+        .insertAdjacentElement('afterend', this._endAnchor)
+        .addEventListener('focus', () => this.focusFirstTabbableElement());
+    });
+  }
+
+  /**
+   * Waits for microtask queue to empty, then focuses
+   * the first tabbable element within the focus trap region.
+   */
+  focusFirstTabbableElementWhenReady() {
+    this._ngZone.onMicrotaskEmpty.first().subscribe(() => this.focusFirstTabbableElement());
+  }
+
+  /**
+   * Waits for microtask queue to empty, then focuses
+   * the last tabbable element within the focus trap region.
+   */
+  focusLastTabbableElementWhenReady() {
+    this._ngZone.onMicrotaskEmpty.first().subscribe(() => this.focusLastTabbableElement());
+  }
 
   /** Focuses the first tabbable element within the focus trap region. */
   focusFirstTabbableElement() {
-    let redirectToElement = this._getFirstTabbableElement(this.trappedContent.nativeElement);
+    let redirectToElement = this._element.querySelector('[cdk-focus-start]') as HTMLElement ||
+                            this._getFirstTabbableElement(this._element);
+
     if (redirectToElement) {
       redirectToElement.focus();
     }
@@ -35,7 +110,15 @@ export class FocusTrap {
 
   /** Focuses the last tabbable element within the focus trap region. */
   focusLastTabbableElement() {
-    let redirectToElement = this._getLastTabbableElement(this.trappedContent.nativeElement);
+    let focusTargets = this._element.querySelectorAll('[cdk-focus-end]');
+    let redirectToElement: HTMLElement = null;
+
+    if (focusTargets.length) {
+      redirectToElement = focusTargets[focusTargets.length - 1] as HTMLElement;
+    } else {
+      redirectToElement = this._getLastTabbableElement(this._element);
+    }
+
     if (redirectToElement) {
       redirectToElement.focus();
     }
@@ -74,5 +157,82 @@ export class FocusTrap {
     }
 
     return null;
+  }
+
+  /** Creates an anchor element. */
+  private _createAnchor(): HTMLElement {
+    let anchor = document.createElement('div');
+    anchor.tabIndex = this._enabled ? 0 : -1;
+    anchor.classList.add('cdk-visually-hidden');
+    anchor.classList.add('cdk-focus-trap-anchor');
+    return anchor;
+  }
+}
+
+
+/** Factory that allows easy instantiation of focus traps. */
+@Injectable()
+export class FocusTrapFactory {
+  constructor(private _checker: InteractivityChecker, private _ngZone: NgZone) { }
+
+  create(element: HTMLElement, deferAnchors = false): FocusTrap {
+    return new FocusTrap(element, this._checker, this._ngZone, deferAnchors);
+  }
+}
+
+
+/**
+ * Directive for trapping focus within a region.
+ * @deprecated
+ */
+@Directive({
+  selector: 'cdk-focus-trap',
+})
+export class FocusTrapDeprecatedDirective implements OnDestroy, AfterContentInit {
+  focusTrap: FocusTrap;
+
+  /** Whether the focus trap is active. */
+  @Input()
+  get disabled(): boolean { return !this.focusTrap.enabled; }
+  set disabled(val: boolean) {
+    this.focusTrap.enabled = !coerceBooleanProperty(val);
+  }
+
+  constructor(private _elementRef: ElementRef, private _focusTrapFactory: FocusTrapFactory) {
+    this.focusTrap = this._focusTrapFactory.create(this._elementRef.nativeElement, true);
+  }
+
+  ngOnDestroy() {
+    this.focusTrap.destroy();
+  }
+
+  ngAfterContentInit() {
+    this.focusTrap.attachAnchors();
+  }
+}
+
+
+/** Directive for trapping focus within a region. */
+@Directive({
+  selector: '[cdkTrapFocus]'
+})
+export class FocusTrapDirective implements OnDestroy, AfterContentInit {
+  focusTrap: FocusTrap;
+
+  /** Whether the focus trap is active. */
+  @Input('cdkTrapFocus')
+  get enabled(): boolean { return this.focusTrap.enabled; }
+  set enabled(value: boolean) { this.focusTrap.enabled = coerceBooleanProperty(value); }
+
+  constructor(private _elementRef: ElementRef, private _focusTrapFactory: FocusTrapFactory) {
+    this.focusTrap = this._focusTrapFactory.create(this._elementRef.nativeElement, true);
+  }
+
+  ngOnDestroy() {
+    this.focusTrap.destroy();
+  }
+
+  ngAfterContentInit() {
+    this.focusTrap.attachAnchors();
   }
 }

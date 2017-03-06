@@ -17,14 +17,14 @@ import {
 import {MenuPositionX, MenuPositionY} from './menu-positions';
 import {MdMenuInvalidPositionX, MdMenuInvalidPositionY} from './menu-errors';
 import {MdMenuItem} from './menu-item';
-import {ListKeyManager} from '../core/a11y/list-key-manager';
+import {FocusKeyManager} from '../core/a11y/focus-key-manager';
 import {MdMenuPanel} from './menu-panel';
 import {Subscription} from 'rxjs/Subscription';
 import {transformMenu, fadeInItems} from './menu-animations';
 
 @Component({
   moduleId: module.id,
-  selector: 'md-menu',
+  selector: 'md-menu, mat-menu',
   host: {'role': 'menu'},
   templateUrl: 'menu.html',
   styleUrls: ['menu.css'],
@@ -36,7 +36,7 @@ import {transformMenu, fadeInItems} from './menu-animations';
   exportAs: 'mdMenu'
 })
 export class MdMenu implements AfterContentInit, MdMenuPanel, OnDestroy {
-  private _keyManager: ListKeyManager;
+  private _keyManager: FocusKeyManager;
 
   /** Subscription to tab events on the menu panel */
   private _tabSubscription: Subscription;
@@ -44,32 +44,33 @@ export class MdMenu implements AfterContentInit, MdMenuPanel, OnDestroy {
   /** Config object to be passed into the menu's ngClass */
   _classList: any = {};
 
+  /** Position of the menu in the X axis. */
   positionX: MenuPositionX = 'after';
+
+  /** Position of the menu in the Y axis. */
   positionY: MenuPositionY = 'below';
 
   @ViewChild(TemplateRef) templateRef: TemplateRef<any>;
   @ContentChildren(MdMenuItem) items: QueryList<MdMenuItem>;
+  @Input() overlapTrigger = true;
 
   constructor(@Attribute('x-position') posX: MenuPositionX,
               @Attribute('y-position') posY: MenuPositionY) {
     if (posX) { this._setPositionX(posX); }
     if (posY) { this._setPositionY(posY); }
-    this._setPositionClasses();
+    this.setPositionClasses(this.positionX, this.positionY);
   }
 
-  // TODO: internal
   ngAfterContentInit() {
-    this._keyManager = new ListKeyManager(this.items);
+    this._keyManager = new FocusKeyManager(this.items).withWrap();
     this._tabSubscription = this._keyManager.tabOut.subscribe(() => {
       this._emitCloseEvent();
     });
   }
 
-  // TODO: internal
   ngOnDestroy() {
     this._tabSubscription.unsubscribe();
   }
-
 
   /**
    * This method takes classes set on the host md-menu element and applies them on the
@@ -83,20 +84,18 @@ export class MdMenu implements AfterContentInit, MdMenuPanel, OnDestroy {
       obj[className] = true;
       return obj;
     }, {});
-    this._setPositionClasses();
+    this.setPositionClasses(this.positionX, this.positionY);
   }
 
+  /** Event emitted when the menu is closed. */
   @Output() close = new EventEmitter<void>();
 
   /**
    * Focus the first item in the menu. This method is used by the menu trigger
    * to focus the first item when the menu is opened by the ENTER key.
-   * TODO: internal
    */
   focusFirstItem() {
-    // The menu always opens with the first item focused.
-    this.items.first.focus();
-    this._keyManager.focusedItemIndex = 0;
+    this._keyManager.setFirstItemActive();
   }
 
   /**
@@ -125,11 +124,11 @@ export class MdMenu implements AfterContentInit, MdMenuPanel, OnDestroy {
    * It's necessary to set position-based classes to ensure the menu panel animation
    * folds out from the correct direction.
    */
-  private _setPositionClasses() {
-    this._classList['md-menu-before'] = this.positionX == 'before';
-    this._classList['md-menu-after'] = this.positionX == 'after';
-    this._classList['md-menu-above'] = this.positionY == 'above';
-    this._classList['md-menu-below'] = this.positionY == 'below';
+  setPositionClasses(posX: MenuPositionX, posY: MenuPositionY): void {
+    this._classList['mat-menu-before'] = posX == 'before';
+    this._classList['mat-menu-after'] = posX == 'after';
+    this._classList['mat-menu-above'] = posY == 'above';
+    this._classList['mat-menu-below'] = posY == 'below';
   }
 
 }

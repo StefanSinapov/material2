@@ -13,4 +13,10 @@ export class MdSnackBarConfig {
 
   /** The view container to place the overlay for the snack bar into. */
   viewContainerRef?: ViewContainerRef = null;
+
+  /** The length of time in milliseconds to wait before automatically dismissing the snack bar. */
+  duration?: number = 0;
+
+  /** Extra CSS classes to be added to the snack bar container. */
+  extraClasses?: string[];
 }

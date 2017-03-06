@@ -1,24 +1,41 @@
 import {
-    NgModule,
-    ModuleWithProviders,
-    Component,
-    ElementRef,
-    Input,
-    Output,
-    ViewEncapsulation,
-    forwardRef,
-    EventEmitter,
+  Component,
+  ElementRef,
+  Input,
+  Output,
+  ViewEncapsulation,
+  forwardRef,
+  EventEmitter,
+  Optional
 } from '@angular/core';
-import {NG_VALUE_ACCESSOR, ControlValueAccessor, FormsModule} from '@angular/forms';
-import {HAMMER_GESTURE_CONFIG} from '@angular/platform-browser';
-import {MdGestureConfig, coerceBooleanProperty, coerceNumberProperty} from '../core';
-import {Input as HammerInput} from 'hammerjs';
+import {NG_VALUE_ACCESSOR, ControlValueAccessor} from '@angular/forms';
+import {HammerInput, coerceBooleanProperty, coerceNumberProperty} from '../core';
+import {Dir} from '../core/rtl/dir';
+import {
+  PAGE_UP,
+  PAGE_DOWN,
+  END,
+  HOME,
+  LEFT_ARROW,
+  UP_ARROW,
+  RIGHT_ARROW,
+  DOWN_ARROW
+} from '../core/keyboard/keycodes';
 
 /**
  * Visually, a 30px separation between tick marks looks best. This is very subjective but it is
  * the default separation we chose.
  */
 const MIN_AUTO_TICK_SEPARATION = 30;
+
+/** The thumb gap size for a disabled slider. */
+const DISABLED_THUMB_GAP = 7;
+
+/** The thumb gap size for a non-active slider at its minimum value. */
+const MIN_VALUE_NONACTIVE_THUMB_GAP = 7;
+
+/** The thumb gap size for an active slider at its minimum value. */
+const MIN_VALUE_ACTIVE_THUMB_GAP = 10;
 
 /**
  * Provider Expression that allows md-slider to register as a ControlValueAccessor.
@@ -36,27 +53,40 @@ export class MdSliderChange {
   value: number;
 }
 
+/**
+ * Allows users to select from a range of values by moving the slider thumb. It is similar in
+ * behavior to the native `<input type="range">` element.
+ */
 @Component({
   moduleId: module.id,
-  selector: 'md-slider',
+  selector: 'md-slider, mat-slider',
   providers: [MD_SLIDER_VALUE_ACCESSOR],
   host: {
+    '[class.mat-slider]': 'true',
     '(blur)': '_onBlur()',
     '(click)': '_onClick($event)',
+    '(keydown)': '_onKeydown($event)',
+    '(keyup)': '_onKeyup()',
     '(mouseenter)': '_onMouseenter()',
     '(slide)': '_onSlide($event)',
     '(slideend)': '_onSlideEnd()',
     '(slidestart)': '_onSlideStart($event)',
+    'role': 'slider',
     'tabindex': '0',
     '[attr.aria-disabled]': 'disabled',
     '[attr.aria-valuemax]': 'max',
     '[attr.aria-valuemin]': 'min',
     '[attr.aria-valuenow]': 'value',
-    '[class.md-slider-active]': '_isActive',
-    '[class.md-slider-disabled]': 'disabled',
-    '[class.md-slider-has-ticks]': 'tickInterval',
-    '[class.md-slider-sliding]': '_isSliding',
-    '[class.md-slider-thumb-label-showing]': 'thumbLabel',
+    '[class.mat-slider-active]': '_isActive',
+    '[class.mat-slider-disabled]': 'disabled',
+    '[class.mat-slider-has-ticks]': 'tickInterval',
+    '[class.mat-slider-horizontal]': '!vertical',
+    '[class.mat-slider-axis-inverted]': 'invertAxis',
+    '[class.mat-slider-sliding]': '_isSliding',
+    '[class.mat-slider-thumb-label-showing]': 'thumbLabel',
+    '[class.mat-slider-vertical]': 'vertical',
+    '[class.mat-slider-min-value]': '_isMinValue',
+    '[class.mat-slider-hide-last-tick]': '_isMinValue && _thumbGap && invertAxis',
   },
   templateUrl: 'slider.html',
   styleUrls: ['slider.css'],
@@ -69,24 +99,30 @@ export class MdSlider implements ControlValueAccessor {
   /** The dimensions of the slider. */
   private _sliderDimensions: ClientRect = null;
 
-  /** Whether or not the slider is disabled. */
   private _disabled: boolean = false;
 
+  /** Whether or not the slider is disabled. */
   @Input()
   get disabled(): boolean { return this._disabled; }
   set disabled(value) { this._disabled = coerceBooleanProperty(value); }
 
-  /** Whether or not to show the thumb label. */
   private _thumbLabel: boolean = false;
 
-  @Input('thumb-label')
+  /** Whether or not to show the thumb label. */
+  @Input('thumbLabel')
   get thumbLabel(): boolean { return this._thumbLabel; }
   set thumbLabel(value) { this._thumbLabel = coerceBooleanProperty(value); }
 
+  /** @deprecated */
+  @Input('thumb-label')
+  get _thumbLabelDeprecated(): boolean { return this._thumbLabel; }
+  set _thumbLabelDeprecated(value) { this._thumbLabel = value; }
+
   private _controlValueAccessorChangeFn: (value: any) => void = () => {};
 
-  /** The last value for which a change event was emitted. */
-  private _lastEmittedValue: number = null;
+  /** The last values for which a change or input event was emitted. */
+  private _lastChangeValue: number = null;
+  private _lastInputValue: number = null;
 
   /** onTouch function registered via registerOnTouch (ControlValueAccessor). */
   onTouched: () => any = () => {};
@@ -103,38 +139,52 @@ export class MdSlider implements ControlValueAccessor {
    */
   _isActive: boolean = false;
 
-  /** The values at which the thumb will snap. */
+  /** Decimal places to round to, based on the step amount. */
+  private _roundLabelTo: number;
+
   private _step: number = 1;
 
+  /** The values at which the thumb will snap. */
   @Input()
   get step() { return this._step; }
-  set step(v) { this._step = coerceNumberProperty(v, this._step); }
+  set step(v) {
+    this._step = coerceNumberProperty(v, this._step);
+
+    if (this._step % 1 !== 0) {
+      this._roundLabelTo = this._step.toString().split('.').pop().length;
+    }
+  }
+
+  private _tickInterval: 'auto' | number = 0;
 
   /**
    * How often to show ticks. Relative to the step so that a tick always appears on a step.
    * Ex: Tick interval of 4 with a step of 3 will draw a tick every 4 steps (every 12 values).
    */
-  private _tickInterval: 'auto' | number = 0;
-
-  @Input('tick-interval')
+  @Input()
   get tickInterval() { return this._tickInterval; }
   set tickInterval(v) {
     this._tickInterval = (v == 'auto') ? v : coerceNumberProperty(v, <number>this._tickInterval);
   }
 
-  /** The size of a tick interval as a percentage of the size of the track. */
+  /** @deprecated */
+  @Input('tick-interval')
+  get _tickIntervalDeprecated() { return this.tickInterval; }
+  set _tickIntervalDeprecated(v) { this.tickInterval = v; }
+
   private _tickIntervalPercent: number = 0;
 
+  /** The size of a tick interval as a percentage of the size of the track. */
   get tickIntervalPercent() { return this._tickIntervalPercent; }
 
-  /** The percentage of the slider that coincides with the value. */
   private _percent: number = 0;
 
+  /** The percentage of the slider that coincides with the value. */
   get percent() { return this._clamp(this._percent); }
 
-  /** Value of the slider. */
   private _value: number = null;
 
+  /** Value of the slider. */
   @Input()
   get value() {
     // If the value needs to be read and it is still uninitialized, initialize it to the min.
@@ -148,9 +198,9 @@ export class MdSlider implements ControlValueAccessor {
     this._percent = this._calculatePercentage(this._value);
   }
 
-  /** The miniumum value that the slider can have. */
   private _min: number = 0;
 
+  /** The minimum value that the slider can have. */
   @Input()
   get min() {
     return this._min;
@@ -165,9 +215,9 @@ export class MdSlider implements ControlValueAccessor {
     this._percent = this._calculatePercentage(this.value);
   }
 
-  /** The maximum value that the slider can have. */
   private _max: number = 100;
 
+  /** The maximum value that the slider can have. */
   @Input()
   get max() {
     return this._max;
@@ -177,25 +227,147 @@ export class MdSlider implements ControlValueAccessor {
     this._percent = this._calculatePercentage(this.value);
   }
 
-  get trackFillFlexBasis() {
-    return this.percent * 100 + '%';
+  /** Whether the slider is inverted. */
+  @Input()
+  get invert() { return this._invert; }
+  set invert(value: any) { this._invert = coerceBooleanProperty(value); }
+  private _invert = false;
+
+  /** Whether the slider is vertical. */
+  @Input()
+  get vertical() { return this._vertical; }
+  set vertical(value: any) { this._vertical = coerceBooleanProperty(value); }
+  private _vertical = false;
+
+  /** The value to be used for display purposes. */
+  get displayValue(): string|number {
+    // Note that this could be improved further by rounding something like 0.999 to 1 or
+    // 0.899 to 0.9, however it is very performance sensitive, because it gets called on
+    // every change detection cycle.
+    if (this._roundLabelTo && this.value % 1 !== 0) {
+      return this.value.toFixed(this._roundLabelTo);
+    }
+
+    return this.value;
   }
 
-  get ticksMarginLeft() {
-    return this.tickIntervalPercent / 2 * 100 + '%';
+  /**
+   * Whether the axis of the slider is inverted.
+   * (i.e. whether moving the thumb in the positive x or y direction decreases the slider's value).
+   */
+  get invertAxis() {
+    // Standard non-inverted mode for a vertical slider should be dragging the thumb from bottom to
+    // top. However from a y-axis standpoint this is inverted.
+    return this.vertical ? !this.invert : this.invert;
   }
 
-  get ticksContainerMarginLeft() {
-    return '-' + this.ticksMarginLeft;
+  /**
+   * Whether mouse events should be converted to a slider position by calculating their distance
+   * from the right or bottom edge of the slider as opposed to the top or left.
+   */
+  get invertMouseCoords() {
+    return (this.direction == 'rtl' && !this.vertical) ? !this.invertAxis : this.invertAxis;
   }
 
-  get ticksBackgroundSize() {
-    return this.tickIntervalPercent * 100 + '% 2px';
+  /** Whether the slider is at its minimum value. */
+  get _isMinValue() {
+    return this.percent === 0;
   }
 
+  /**
+   * The amount of space to leave between the slider thumb and the track fill & track background
+   * elements.
+   */
+  get _thumbGap() {
+    if (this.disabled) {
+      return DISABLED_THUMB_GAP;
+    }
+    if (this._isMinValue && !this.thumbLabel) {
+      return this._isActive ? MIN_VALUE_ACTIVE_THUMB_GAP : MIN_VALUE_NONACTIVE_THUMB_GAP;
+    }
+    return 0;
+  }
+
+  /** CSS styles for the track background element. */
+  get trackBackgroundStyles(): { [key: string]: string } {
+    let axis = this.vertical ? 'Y' : 'X';
+    let sign = this.invertMouseCoords ? '-' : '';
+    return {
+      'transform': `translate${axis}(${sign}${this._thumbGap}px) scale${axis}(${1 - this.percent})`
+    };
+  }
+
+  /** CSS styles for the track fill element. */
+  get trackFillStyles(): { [key: string]: string } {
+    let axis = this.vertical ? 'Y' : 'X';
+    let sign = this.invertMouseCoords ? '' : '-';
+    return {
+      'transform': `translate${axis}(${sign}${this._thumbGap}px) scale${axis}(${this.percent})`
+    };
+  }
+
+  /** CSS styles for the ticks container element. */
+  get ticksContainerStyles(): { [key: string]: string } {
+    let axis = this.vertical ? 'Y' : 'X';
+    // For a horizontal slider in RTL languages we push the ticks container off the left edge
+    // instead of the right edge to avoid causing a horizontal scrollbar to appear.
+    let sign = !this.vertical && this.direction == 'rtl' ? '' : '-';
+    let offset = this.tickIntervalPercent / 2 * 100;
+    return {
+      'transform': `translate${axis}(${sign}${offset}%)`
+    };
+  }
+
+  /** CSS styles for the ticks element. */
+  get ticksStyles(): { [key: string]: string } {
+    let tickSize = this.tickIntervalPercent * 100;
+    let backgroundSize = this.vertical ? `2px ${tickSize}%` : `${tickSize}% 2px`;
+    let axis = this.vertical ? 'Y' : 'X';
+    // Depending on the direction we pushed the ticks container, push the ticks the opposite
+    // direction to re-center them but clip off the end edge. In RTL languages we need to flip the
+    // ticks 180 degrees so we're really cutting off the end edge abd not the start.
+    let sign = !this.vertical && this.direction == 'rtl' ? '-' : '';
+    let rotate = !this.vertical && this.direction == 'rtl' ? ' rotate(180deg)' : '';
+    let styles: { [key: string]: string } = {
+      'backgroundSize': backgroundSize,
+      // Without translateZ ticks sometimes jitter as the slider moves on Chrome & Firefox.
+      'transform': `translateZ(0) translate${axis}(${sign}${tickSize / 2}%)${rotate}`
+    };
+
+    if (this._isMinValue && this._thumbGap) {
+      let side = this.vertical ?
+          (this.invertAxis ? 'Bottom' : 'Top') :
+          (this.invertAxis ? 'Right' : 'Left');
+      styles[`padding${side}`] = `${this._thumbGap}px`;
+    }
+
+    return styles;
+  }
+
+  get thumbContainerStyles(): { [key: string]: string } {
+    let axis = this.vertical ? 'Y' : 'X';
+    // For a horizontal slider in RTL languages we push the thumb container off the left edge
+    // instead of the right edge to avoid causing a horizontal scrollbar to appear.
+    let invertOffset =
+        (this.direction == 'rtl' && !this.vertical) ? !this.invertAxis : this.invertAxis;
+    let offset = (invertOffset ? this.percent : 1 - this.percent) * 100;
+    return {
+      'transform': `translate${axis}(-${offset}%)`
+    };
+  }
+
+  /** The language direction for this slider element. */
+  get direction() {
+    return (this._dir && this._dir.value == 'rtl') ? 'rtl' : 'ltr';
+  }
+
+  /** Event emitted when the slider value has changed. */
   @Output() change = new EventEmitter<MdSliderChange>();
 
-  constructor(elementRef: ElementRef) {
+  /** Event emitted when the slider thumb moves. */
+  @Output() input = new EventEmitter<MdSliderChange>();
+
+  constructor(@Optional() private _dir: Dir, elementRef: ElementRef) {
     this._renderer = new SliderRenderer(elementRef);
   }
 
@@ -218,7 +390,10 @@ export class MdSlider implements ControlValueAccessor {
     this._isActive = true;
     this._isSliding = false;
     this._renderer.addFocus();
-    this._updateValueFromPosition(event.clientX);
+    this._updateValueFromPosition({x: event.clientX, y: event.clientY});
+
+    /* Emits a change and input event if the value changed. */
+    this._emitInputEvent();
     this._emitValueIfChanged();
   }
 
@@ -229,7 +404,10 @@ export class MdSlider implements ControlValueAccessor {
 
     // Prevent the slide from selecting anything else.
     event.preventDefault();
-    this._updateValueFromPosition(event.center.x);
+    this._updateValueFromPosition({x: event.center.x, y: event.center.y});
+
+    // Native range elements always emit `input` events when the value changed while sliding.
+    this._emitInputEvent();
   }
 
   _onSlideStart(event: HammerInput) {
@@ -237,11 +415,14 @@ export class MdSlider implements ControlValueAccessor {
       return;
     }
 
+    // Simulate mouseenter in case this is a mobile device.
+    this._onMouseenter();
+
     event.preventDefault();
     this._isSliding = true;
     this._isActive = true;
     this._renderer.addFocus();
-    this._updateValueFromPosition(event.center.x);
+    this._updateValueFromPosition({x: event.center.x, y: event.center.y});
   }
 
   _onSlideEnd() {
@@ -254,19 +435,78 @@ export class MdSlider implements ControlValueAccessor {
     this.onTouched();
   }
 
-  /**
-   * Calculate the new value from the new physical location. The value will always be snapped.
-   */
-  private _updateValueFromPosition(pos: number) {
+  _onKeydown(event: KeyboardEvent) {
+    if (this.disabled) { return; }
+
+    switch (event.keyCode) {
+      case PAGE_UP:
+        this._increment(10);
+        break;
+      case PAGE_DOWN:
+        this._increment(-10);
+        break;
+      case END:
+        this.value = this.max;
+        break;
+      case HOME:
+        this.value = this.min;
+        break;
+      case LEFT_ARROW:
+        // NOTE: For a sighted user it would make more sense that when they press an arrow key on an
+        // inverted slider the thumb moves in that direction. However for a blind user, nothing
+        // about the slider indicates that it is inverted. They will expect left to be decrement,
+        // regardless of how it appears on the screen. For speakers ofRTL languages, they probably
+        // expect left to mean increment. Therefore we flip the meaning of the side arrow keys for
+        // RTL. For inverted sliders we prefer a good a11y experience to having it "look right" for
+        // sighted users, therefore we do not swap the meaning.
+        this._increment(this.direction == 'rtl' ? 1 : -1);
+        break;
+      case UP_ARROW:
+        this._increment(1);
+        break;
+      case RIGHT_ARROW:
+        // See comment on LEFT_ARROW about the conditions under which we flip the meaning.
+        this._increment(this.direction == 'rtl' ? -1 : 1);
+        break;
+      case DOWN_ARROW:
+        this._increment(-1);
+        break;
+      default:
+        // Return if the key is not one that we explicitly handle to avoid calling preventDefault on
+        // it.
+        return;
+    }
+
+    this._isSliding = true;
+    event.preventDefault();
+  }
+
+  _onKeyup() {
+    this._isSliding = false;
+  }
+
+  /** Increments the slider by the given number of steps (negative number decrements). */
+  private _increment(numSteps: number) {
+    this.value = this._clamp(this.value + this.step * numSteps, this.min, this.max);
+    this._emitInputEvent();
+    this._emitValueIfChanged();
+  }
+
+  /** Calculate the new value from the new physical location. The value will always be snapped. */
+  private _updateValueFromPosition(pos: {x: number, y: number}) {
     if (!this._sliderDimensions) {
       return;
     }
 
-    let offset = this._sliderDimensions.left;
-    let size = this._sliderDimensions.width;
+    let offset = this.vertical ? this._sliderDimensions.top : this._sliderDimensions.left;
+    let size = this.vertical ? this._sliderDimensions.height : this._sliderDimensions.width;
+    let posComponent = this.vertical ? pos.y : pos.x;
 
     // The exact value is calculated from the event and used to find the closest snap value.
-    let percent = this._clamp((pos - offset) / size);
+    let percent = this._clamp((posComponent - offset) / size);
+    if (this.invertMouseCoords) {
+      percent = 1 - percent;
+    }
     let exactValue = this._calculateValue(percent);
 
     // This calculation finds the closest step by finding the closest whole number divisible by the
@@ -278,78 +518,95 @@ export class MdSlider implements ControlValueAccessor {
 
   /** Emits a change event if the current value is different from the last emitted value. */
   private _emitValueIfChanged() {
-    if (this.value != this._lastEmittedValue) {
-      let event = new MdSliderChange();
-      event.source = this;
-      event.value = this.value;
-      this.change.emit(event);
+    if (this.value != this._lastChangeValue) {
+      let event = this._createChangeEvent();
+      this._lastChangeValue = this.value;
       this._controlValueAccessorChangeFn(this.value);
-      this._lastEmittedValue = this.value;
+      this.change.emit(event);
     }
   }
 
-  /**
-   * Updates the amount of space between ticks as a percentage of the width of the slider.
-   */
+  /** Emits an input event when the current value is different from the last emitted value. */
+  private _emitInputEvent() {
+    if (this.value != this._lastInputValue) {
+      let event = this._createChangeEvent();
+      this._lastInputValue = this.value;
+      this.input.emit(event);
+    }
+  }
+
+  /** Updates the amount of space between ticks as a percentage of the width of the slider. */
   private _updateTickIntervalPercent() {
     if (!this.tickInterval) {
       return;
     }
 
     if (this.tickInterval == 'auto') {
-      let pixelsPerStep = this._sliderDimensions.width * this.step / (this.max - this.min);
+      let trackSize = this.vertical ? this._sliderDimensions.height : this._sliderDimensions.width;
+      let pixelsPerStep = trackSize * this.step / (this.max - this.min);
       let stepsPerTick = Math.ceil(MIN_AUTO_TICK_SEPARATION / pixelsPerStep);
       let pixelsPerTick = stepsPerTick * this.step;
-      this._tickIntervalPercent = pixelsPerTick / (this._sliderDimensions.width);
+      this._tickIntervalPercent = pixelsPerTick / trackSize;
     } else {
       this._tickIntervalPercent = this.tickInterval * this.step / (this.max - this.min);
     }
   }
 
-  /**
-   * Calculates the percentage of the slider that a value is.
-   */
+  /** Creates a slider change object from the specified value. */
+  private _createChangeEvent(value = this.value): MdSliderChange {
+    let event = new MdSliderChange();
+
+    event.source = this;
+    event.value = value;
+
+    return event;
+  }
+
+  /** Calculates the percentage of the slider that a value is. */
   private _calculatePercentage(value: number) {
     return (value - this.min) / (this.max - this.min);
   }
 
-  /**
-   * Calculates the value a percentage of the slider corresponds to.
-   */
+  /** Calculates the value a percentage of the slider corresponds to. */
   private _calculateValue(percentage: number) {
     return this.min + percentage * (this.max - this.min);
   }
 
-  /**
-   * Return a number between two numbers.
-   */
+  /** Return a number between two numbers. */
   private _clamp(value: number, min = 0, max = 1) {
     return Math.max(min, Math.min(value, max));
   }
 
   /**
-   * Implemented as part of ControlValueAccessor.
+   * Sets the model value. Implemented as part of ControlValueAccessor.
+   * @param value
    */
   writeValue(value: any) {
     this.value = value;
   }
 
   /**
+   * Registers a callback to eb triggered when the value has changed.
    * Implemented as part of ControlValueAccessor.
+   * @param fn Callback to be registered.
    */
   registerOnChange(fn: (value: any) => void) {
     this._controlValueAccessorChangeFn = fn;
   }
 
   /**
+   * Registers a callback to be triggered when the component is touched.
    * Implemented as part of ControlValueAccessor.
+   * @param fn Callback to be registered.
    */
   registerOnTouched(fn: any) {
     this.onTouched = fn;
   }
 
   /**
+   * Sets whether the component should be disabled.
    * Implemented as part of ControlValueAccessor.
+   * @param isDisabled
    */
   setDisabledState(isDisabled: boolean) {
     this.disabled = isDisabled;
@@ -358,6 +615,7 @@ export class MdSlider implements ControlValueAccessor {
 
 /**
  * Renderer class in order to keep all dom manipulation in one place and outside of the main class.
+ * @docs-private
  */
 export class SliderRenderer {
   private _sliderElement: HTMLElement;
@@ -372,8 +630,8 @@ export class SliderRenderer {
    * take up.
    */
   getSliderDimensions() {
-    let trackElement = this._sliderElement.querySelector('.md-slider-track');
-    return trackElement.getBoundingClientRect();
+    let wrapperElement = this._sliderElement.querySelector('.mat-slider-wrapper');
+    return wrapperElement.getBoundingClientRect();
   }
 
   /**
@@ -382,23 +640,5 @@ export class SliderRenderer {
    */
   addFocus() {
     this._sliderElement.focus();
-  }
-}
-
-
-@NgModule({
-  imports: [FormsModule],
-  exports: [MdSlider],
-  declarations: [MdSlider],
-  providers: [
-    {provide: HAMMER_GESTURE_CONFIG, useClass: MdGestureConfig},
-  ],
-})
-export class MdSliderModule {
-  static forRoot(): ModuleWithProviders {
-    return {
-      ngModule: MdSliderModule,
-      providers: [{provide: HAMMER_GESTURE_CONFIG, useClass: MdGestureConfig}]
-    };
   }
 }

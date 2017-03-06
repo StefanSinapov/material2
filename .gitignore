@@ -3,8 +3,8 @@
 # compiled output
 /dist
 /tmp
-/typings
 /deploy
+/screenshots
 
 # dependencies
 /node_modules

@@ -5,16 +5,26 @@ import {
     ElementRef,
     QueryList
 } from '@angular/core';
+import {CompatibilityModule} from '../compatibility/compatibility';
+
 
 /**
  * Shared directive to count lines inside a text area, such as a list item.
  * Line elements can be extracted with a @ContentChildren(MdLine) query, then
  * counted by checking the query list's length.
  */
-@Directive({ selector: '[md-line]' })
+@Directive({
+  selector: '[md-line], [mat-line]',
+  host: {
+    '[class.mat-line]': 'true'
+  }
+})
 export class MdLine {}
 
-/* Helper that takes a query list of lines and sets the correct class on the host */
+/**
+ * Helper that takes a query list of lines and sets the correct class on the host.
+ * @docs-private
+ */
 export class MdLineSetter {
   constructor(private _lines: QueryList<MdLine>, private _renderer: Renderer,
               private _element: ElementRef) {
@@ -28,16 +38,16 @@ export class MdLineSetter {
   private _setLineClass(count: number): void {
     this._resetClasses();
     if (count === 2 || count === 3) {
-      this._setClass(`md-${count}-line`, true);
+      this._setClass(`mat-${count}-line`, true);
     } else if (count > 3) {
-      this._setClass(`md-multi-line`, true);
+      this._setClass(`mat-multi-line`, true);
     }
   }
 
   private _resetClasses(): void {
-    this._setClass('md-2-line', false);
-    this._setClass('md-3-line', false);
-    this._setClass('md-multi-line', false);
+    this._setClass('mat-2-line', false);
+    this._setClass('mat-3-line', false);
+    this._setClass('mat-multi-line', false);
   }
 
   private _setClass(className: string, bool: boolean): void {
@@ -47,7 +57,8 @@ export class MdLineSetter {
 }
 
 @NgModule({
-  exports: [MdLine],
+  imports: [CompatibilityModule],
+  exports: [MdLine, CompatibilityModule],
   declarations: [MdLine],
 })
 export class MdLineModule { }
