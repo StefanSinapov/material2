@@ -29,15 +29,50 @@ Components created via `MdDialog` can _inject_ `MdDialogRef` and use it to close
 in which they are contained. When closing, an optional result value can be provided. This result
 value is forwarded as the result of the `afterClosed` promise. 
 
+### Sharing data with the Dialog component.
+If you want to share data with your dialog, you can use the `data` option to pass information to the dialog component.
+
+```ts
+let dialogRef = dialog.open(YourDialog, {
+  data: 'your data',
+});
+```
+
+To access the data in your dialog component, you have to use the MD_DIALOG_DATA injection token:
+```ts
+import {Component, Inject} from '@angular/core';
+import {MD_DIALOG_DATA} from '@angular/material';
+
+@Component({
+  selector: 'your-dialog',
+  template: 'passed in {{ data }}',
+})
+
+export class YourDialog {
+  constructor(@Inject(MD_DIALOG_DATA) public data: any) { }
+}
+```
+
 ### Dialog content
 Several directives are available to make it easier to structure your dialog content:
 
-| Name                  | Description                                                              |
-|-----------------------|--------------------------------------------------------------------------|
-| `md-dialog-title`     | \[Attr] Dialog title, applied to a heading element (e.g., `<h1>`, `<h2>`)|
-| `<md-dialog-content>` | Primary scrollable content of the dialog                                 |
-| `<md-dialog-actions>` | Container for action buttons at the bottom of the dialog                 |
-| `md-dialog-close`     | \[Attr] Added to a `<button>`, makes the button close the dialog on click|
+| Name                  | Description                                                                                                   |
+|-----------------------|---------------------------------------------------------------------------------------------------------------|
+| `md-dialog-title`     | \[Attr] Dialog title, applied to a heading element (e.g., `<h1>`, `<h2>`)                                     |
+| `<md-dialog-content>` | Primary scrollable content of the dialog                                                                      |
+| `<md-dialog-actions>` | Container for action buttons at the bottom of the dialog                                                      |
+| `md-dialog-close`     | \[Attr] Added to a `<button>`, makes the button close the dialog with an optional result from the bound value.|
+
+For example:
+```html
+<h2 md-dialog-title>Delete all</h2>
+<md-dialog-content>Are you sure?</md-dialog-content>
+<md-dialog-actions>
+  <button md-button md-dialog-close>No</button>
+  <!-- Can optionally provide a result for the closing dialog. -->
+  <button md-button [md-dialog-close]="true">Yes</button>
+</md-dialog-actions>
+```
 
 Once a dialog opens, the dialog will automatically focus the first tabbable element.
 
@@ -60,7 +95,7 @@ that the AOT compiler knows to create the `ComponentFactory` for it.
 @NgModule({
   imports: [
     // ...
-    MaterialModule
+    MdDialogModule
   ],
 
   declarations: [

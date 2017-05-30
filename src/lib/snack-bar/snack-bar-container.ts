@@ -2,17 +2,19 @@ import {
   Component,
   ComponentRef,
   ViewChild,
+  NgZone,
+  OnDestroy,
+  Renderer2,
+  ElementRef,
+} from '@angular/core';
+import {
   trigger,
   state,
   style,
   transition,
   animate,
-  AnimationTransitionEvent,
-  NgZone,
-  OnDestroy,
-  Renderer,
-  ElementRef,
-} from '@angular/core';
+  AnimationEvent,
+} from '@angular/animations';
 import {
   BasePortalHost,
   ComponentPortal,
@@ -20,7 +22,6 @@ import {
   PortalHostDirective,
 } from '../core';
 import {MdSnackBarConfig} from './snack-bar-config';
-import {MdSnackBarContentAlreadyAttached} from './snack-bar-errors';
 import {Observable} from 'rxjs/Observable';
 import {Subject} from 'rxjs/Subject';
 
@@ -75,7 +76,7 @@ export class MdSnackBarContainer extends BasePortalHost implements OnDestroy {
 
   constructor(
     private _ngZone: NgZone,
-    private _renderer: Renderer,
+    private _renderer: Renderer2,
     private _elementRef: ElementRef) {
     super();
   }
@@ -83,14 +84,14 @@ export class MdSnackBarContainer extends BasePortalHost implements OnDestroy {
   /** Attach a component portal as content to this snack bar container. */
   attachComponentPortal<T>(portal: ComponentPortal<T>): ComponentRef<T> {
     if (this._portalHost.hasAttached()) {
-      throw new MdSnackBarContentAlreadyAttached();
+      throw new Error('Attempting to attach snack bar content after content is already attached');
     }
 
     if (this.snackBarConfig.extraClasses) {
       // Not the most efficient way of adding classes, but the renderer doesn't allow us
       // to pass in an array or a space-separated list.
       for (let cssClass of this.snackBarConfig.extraClasses) {
-        this._renderer.setElementClass(this._elementRef.nativeElement, cssClass, true);
+        this._renderer.addClass(this._elementRef.nativeElement, cssClass);
       }
     }
 
@@ -99,19 +100,23 @@ export class MdSnackBarContainer extends BasePortalHost implements OnDestroy {
 
   /** Attach a template portal as content to this snack bar container. */
   attachTemplatePortal(portal: TemplatePortal): Map<string, any> {
-    throw Error('Not yet implemented');
+    throw new Error('Not yet implemented');
   }
 
   /** Handle end of animations, updating the state of the snackbar. */
-  onAnimationEnd(event: AnimationTransitionEvent) {
+  onAnimationEnd(event: AnimationEvent) {
     if (event.toState === 'void' || event.toState === 'complete') {
       this._completeExit();
     }
 
     if (event.toState === 'visible') {
+      // Note: we shouldn't use `this` inside the zone callback,
+      // because it can cause a memory leak.
+      const onEnter = this.onEnter;
+
       this._ngZone.run(() => {
-        this.onEnter.next();
-        this.onEnter.complete();
+        onEnter.next();
+        onEnter.complete();
       });
     }
   }
@@ -150,9 +155,13 @@ export class MdSnackBarContainer extends BasePortalHost implements OnDestroy {
    * errors where we end up removing an element which is in the middle of an animation.
    */
   private _completeExit() {
+    // Note: we shouldn't use `this` inside the zone callback,
+    // because it can cause a memory leak.
+    const onExit = this.onExit;
+
     this._ngZone.onMicrotaskEmpty.first().subscribe(() => {
-      this.onExit.next();
-      this.onExit.complete();
+      onExit.next();
+      onExit.complete();
     });
   }
 }

@@ -1,12 +1,19 @@
-import gulp = require('gulp');
+import {task, src, dest} from 'gulp';
+import {Dgeni} from 'dgeni';
+import * as path from 'path';
+import {DIST_ROOT, HTML_MINIFIER_OPTIONS, SOURCE_ROOT} from '../build-config';
+
+// There are no type definitions available for these imports.
 const markdown = require('gulp-markdown');
 const transform = require('gulp-transform');
 const highlight = require('gulp-highlight-files');
 const rename = require('gulp-rename');
 const flatten = require('gulp-flatten');
+const htmlmin = require('gulp-htmlmin');
 const hljs = require('highlight.js');
-import {task} from 'gulp';
-import * as path from 'path';
+const dom  = require('gulp-dom');
+
+const DIST_DOCS = path.join(DIST_ROOT, 'docs');
 
 // Our docs contain comments of the form `<!-- example(...) -->` which serve as placeholders where
 // example code should be inserted. We replace these comments with divs that have a
@@ -19,10 +26,40 @@ const EXAMPLE_PATTERN = /<!--\W*example\(([^)]+)\)\W*-->/g;
 // documentation page. Using a RegExp to rewrite links in HTML files to work in the docs.
 const LINK_PATTERN = /(<a[^>]*) href="([^"]*)"/g;
 
-gulp.task('docs', ['markdown-docs', 'highlight-docs', 'api-docs'])
+// HTML tags in the markdown generated files that should receive a .docs-markdown-${tagName} class
+// for styling purposes.
+const MARKDOWN_TAGS_TO_CLASS_ALIAS = [
+  'a',
+  'h1',
+  'h2',
+  'h3',
+  'h4',
+  'h5',
+  'li',
+  'ol',
+  'p',
+  'table',
+  'tbody',
+  'td',
+  'th',
+  'tr',
+  'ul',
+  'pre',
+  'code',
+];
 
-gulp.task('markdown-docs', () => {
-  return gulp.src(['src/lib/**/*.md', 'guides/*.md'])
+/** Generate all docs content. */
+task('docs', [
+  'markdown-docs',
+  'highlight-examples',
+  'api-docs',
+  'minified-api-docs',
+  'plunker-example-assets',
+]);
+
+/** Generates html files from the markdown overviews and guides. */
+task('markdown-docs', () => {
+  return src(['src/lib/**/*.md', 'guides/*.md'])
       .pipe(markdown({
         // Add syntax highlight using highlight.js
         highlight: (code: string, language: string) => {
@@ -36,40 +73,58 @@ gulp.task('markdown-docs', () => {
         }
       }))
       .pipe(transform(transformMarkdownFiles))
-      .pipe(gulp.dest('dist/docs/markdown'));
+      .pipe(dom(createTagNameAliaser('docs-markdown')))
+      .pipe(dest('dist/docs/markdown'));
 });
 
-gulp.task('highlight-docs', () => {
+/**
+ * Creates syntax-highlighted html files from the examples to be used for the source view of
+ * live examples on the docs site.
+ */
+task('highlight-examples', () => {
   // rename files to fit format: [filename]-[filetype].html
   const renameFile = (path: any) => {
     const extension = path.extname.slice(1);
     path.basename = `${path.basename}-${extension}`;
   };
 
-  return gulp.src('src/examples/**/*.+(html|css|ts)')
-    .pipe(flatten())
-    .pipe(rename(renameFile))
-    .pipe(highlight())
-    .pipe(gulp.dest('dist/docs/examples'));
+  return src('src/material-examples/**/*.+(html|css|ts)')
+      .pipe(flatten())
+      .pipe(rename(renameFile))
+      .pipe(highlight())
+      .pipe(dest('dist/docs/examples'));
 });
 
+/** Generates API docs from the source JsDoc using dgeni. */
 task('api-docs', () => {
-  const Dgeni = require('dgeni');
   const docsPackage = require(path.resolve(__dirname, '../../dgeni'));
-  const dgeni = new Dgeni([docsPackage]);
-  return dgeni.generate();
+  const docs = new Dgeni([docsPackage]);
+  return docs.generate();
+});
+
+/** Generates minified html api docs. */
+task('minified-api-docs', ['api-docs'], () => {
+  return src('dist/docs/api/*.html')
+    .pipe(htmlmin(HTML_MINIFIER_OPTIONS))
+    .pipe(dest('dist/docs/api/'));
+});
+
+/** Copies example sources to be used as plunker assets for the docs site. */
+task('plunker-example-assets', () => {
+  src(path.join(SOURCE_ROOT, 'material-examples', '**/*'))
+      .pipe(dest(path.join(DIST_DOCS, 'plunker', 'examples')));
 });
 
 /** Updates the markdown file's content to work inside of the docs app. */
 function transformMarkdownFiles(buffer: Buffer, file: any): string {
   let content = buffer.toString('utf-8');
 
-  /* Replace <!-- example(..) --> comments with HTML elements. */
+  // Replace <!-- example(..) --> comments with HTML elements.
   content = content.replace(EXAMPLE_PATTERN, (match: string, name: string) =>
     `<div material-docs-example="${name}"></div>`
   );
 
-  /* Replaces the URL in anchor elements inside of compiled markdown files. */
+  // Replace the URL in anchor elements inside of compiled markdown files.
   content = content.replace(LINK_PATTERN, (match: string, head: string, link: string) =>
     // The head is the first match of the RegExp and is necessary to ensure that the RegExp matches
     // an anchor element. The head will be then used to re-create the existing anchor element.
@@ -77,7 +132,8 @@ function transformMarkdownFiles(buffer: Buffer, file: any): string {
     `${head} href="${fixMarkdownDocLinks(link, file.path)}"`
   );
 
-  return content;
+  // Finally, wrap the entire generated in a doc in a div with a specific class.
+  return `<div class="docs-markdown">${content}</div>`;
 }
 
 /** Fixes paths in the markdown files to work in the material-docs-io. */
@@ -93,4 +149,21 @@ function fixMarkdownDocLinks(link: string, filePath: string): string {
   // Temporary link the file to the /guide URL because that's the route where the
   // guides can be loaded in the Material docs.
   return `guide/${baseName}`;
+}
+
+/**
+ * Returns a function to be called with an HTML document as its context that aliases HTML tags by
+ * adding a class consisting of a prefix + the tag name.
+ * @param classPrefix The prefix to use for the alias class.
+ */
+function createTagNameAliaser(classPrefix: string) {
+  return function() {
+    MARKDOWN_TAGS_TO_CLASS_ALIAS.forEach(tag => {
+      for (let el of this.querySelectorAll(tag)) {
+        el.classList.add(`${classPrefix}-${tag}`);
+      }
+    });
+
+    return this;
+  };
 }

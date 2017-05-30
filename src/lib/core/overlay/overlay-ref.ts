@@ -1,6 +1,7 @@
 import {NgZone} from '@angular/core';
 import {PortalHost, Portal} from '../portal/portal';
 import {OverlayState} from './overlay-state';
+import {ScrollStrategy} from './scroll/scroll-strategy';
 import {Observable} from 'rxjs/Observable';
 import {Subject} from 'rxjs/Subject';
 
@@ -12,12 +13,17 @@ import {Subject} from 'rxjs/Subject';
 export class OverlayRef implements PortalHost {
   private _backdropElement: HTMLElement = null;
   private _backdropClick: Subject<any> = new Subject();
+  private _attachments = new Subject<void>();
+  private _detachments = new Subject<void>();
 
   constructor(
       private _portalHost: PortalHost,
       private _pane: HTMLElement,
       private _state: OverlayState,
-      private _ngZone: NgZone) { }
+      private _ngZone: NgZone) {
+
+    this._state.scrollStrategy.attach(this);
+  }
 
   /** The overlay's HTML element */
   get overlayElement(): HTMLElement {
@@ -30,19 +36,22 @@ export class OverlayRef implements PortalHost {
    * @returns The portal attachment result.
    */
   attach(portal: Portal<any>): any {
-    if (this._state.hasBackdrop) {
-      this._attachBackdrop();
-    }
-
     let attachResult = this._portalHost.attach(portal);
 
     // Update the pane element with the given state configuration.
+    this._updateStackingOrder();
     this.updateSize();
     this.updateDirection();
     this.updatePosition();
+    this._attachments.next();
+    this._state.scrollStrategy.enable();
 
     // Enable pointer events for the overlay pane element.
     this._togglePointerEvents(true);
+
+    if (this._state.hasBackdrop) {
+      this._attachBackdrop();
+    }
 
     return attachResult;
   }
@@ -58,6 +67,8 @@ export class OverlayRef implements PortalHost {
     // This is necessary because otherwise the pane element will cover the page and disable
     // pointer events therefore. Depends on the position strategy and the applied pane boundaries.
     this._togglePointerEvents(false);
+    this._state.scrollStrategy.disable();
+    this._detachments.next();
 
     return this._portalHost.detach();
   }
@@ -72,6 +83,10 @@ export class OverlayRef implements PortalHost {
 
     this.detachBackdrop();
     this._portalHost.dispose();
+    this._state.scrollStrategy.disable();
+    this._detachments.next();
+    this._detachments.complete();
+    this._attachments.complete();
   }
 
   /**
@@ -88,6 +103,16 @@ export class OverlayRef implements PortalHost {
     return this._backdropClick.asObservable();
   }
 
+  /** Returns an observable that emits when the overlay has been attached. */
+  attachments(): Observable<void> {
+    return this._attachments.asObservable();
+  }
+
+  /** Returns an observable that emits when the overlay has been detached. */
+  detachments(): Observable<void> {
+    return this._detachments.asObservable();
+  }
+
   /**
    * Gets the current state config of the overlay.
    */
@@ -102,7 +127,7 @@ export class OverlayRef implements PortalHost {
     }
   }
 
-  /** Updates the text direction of the overlay panel. **/
+  /** Updates the text direction of the overlay panel. */
   private updateDirection() {
     this._pane.setAttribute('dir', this._state.direction);
   }
@@ -151,6 +176,19 @@ export class OverlayRef implements PortalHost {
         this._backdropElement.classList.add('cdk-overlay-backdrop-showing');
       }
     });
+  }
+
+  /**
+   * Updates the stacking order of the element, moving it to the top if necessary.
+   * This is required in cases where one overlay was detached, while another one,
+   * that should be behind it, was destroyed. The next time both of them are opened,
+   * the stacking will be wrong, because the detached element's pane will still be
+   * in its original DOM position.
+   */
+  private _updateStackingOrder() {
+    if (this._pane.nextSibling) {
+      this._pane.parentNode.appendChild(this._pane);
+    }
   }
 
   /** Detaches the backdrop (if any) associated with the overlay. */

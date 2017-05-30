@@ -1,9 +1,12 @@
+// TypeScript config that is used to build the e2e spec files. Protractor will use TS-Node to
+// compile the e2e/ folder at runtime.
 {
   "compilerOptions": {
     "declaration": true,
     "emitDecoratorMetadata": true,
     "experimentalDecorators": true,
     "inlineSources": true,
+    "lib": ["es2015"],
     "module": "commonjs",
     "moduleResolution": "node",
     "noEmitOnError": true,

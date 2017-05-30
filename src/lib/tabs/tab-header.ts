@@ -2,7 +2,6 @@ import {
   ViewChild,
   Component,
   Input,
-  NgZone,
   QueryList,
   ElementRef,
   ViewEncapsulation,
@@ -12,12 +11,21 @@ import {
   Optional,
   AfterContentChecked,
   AfterContentInit,
+  OnDestroy,
+  NgZone,
 } from '@angular/core';
-import {RIGHT_ARROW, LEFT_ARROW, ENTER, Dir, LayoutDirection} from '../core';
+import {RIGHT_ARROW, LEFT_ARROW, ENTER, Dir, LayoutDirection, coerceBooleanProperty} from '../core';
 import {MdTabLabelWrapper} from './tab-label-wrapper';
 import {MdInkBar} from './ink-bar';
-import 'rxjs/add/operator/map';
+import {Subscription} from 'rxjs/Subscription';
+import {Observable} from 'rxjs/Observable';
 import {applyCssTransform} from '../core/style/apply-transform';
+import 'rxjs/add/operator/map';
+import 'rxjs/add/operator/auditTime';
+import 'rxjs/add/observable/of';
+import 'rxjs/add/observable/merge';
+import 'rxjs/add/operator/startWith';
+
 
 /**
  * The directions that scrolling can go in when the header's tabs exceed the header width. 'After'
@@ -37,6 +45,7 @@ const EXAGGERATED_OVERSCROLL = 60;
  * an ink bar that follows the currently selected tab. When the tabs list's width exceeds the
  * width of the header container, then arrows will be displayed to allow the user to scroll
  * left and right across the header.
+ * @docs-private
  */
 @Component({
   moduleId: module.id,
@@ -50,7 +59,7 @@ const EXAGGERATED_OVERSCROLL = 60;
     '[class.mat-tab-header-rtl]': "_getLayoutDirection() == 'rtl'",
   }
 })
-export class MdTabHeader implements AfterContentChecked, AfterContentInit {
+export class MdTabHeader implements AfterContentChecked, AfterContentInit, OnDestroy {
   @ContentChildren(MdTabLabelWrapper) _labelWrappers: QueryList<MdTabLabelWrapper>;
 
   @ViewChild(MdInkBar) _inkBar: MdInkBar;
@@ -65,6 +74,9 @@ export class MdTabHeader implements AfterContentChecked, AfterContentInit {
 
   /** Whether the header should scroll to the selected index after the view has been checked. */
   private _selectedIndexChanged = false;
+
+  /** Combines listeners that will re-align the ink bar whenever they're invoked. */
+  private _realignInkBar: Subscription = null;
 
   /** Whether the controls for pagination should be displayed */
   _showPaginationControls = false;
@@ -87,13 +99,20 @@ export class MdTabHeader implements AfterContentChecked, AfterContentInit {
   private _selectedIndex: number = 0;
 
   /** The index of the active tab. */
-  @Input() set selectedIndex(value: number) {
+  @Input()
+  get selectedIndex(): number { return this._selectedIndex; }
+  set selectedIndex(value: number) {
     this._selectedIndexChanged = this._selectedIndex != value;
 
     this._selectedIndex = value;
     this._focusIndex = value;
   }
-  get selectedIndex(): number { return this._selectedIndex; }
+
+  /** Whether ripples for the tab-header labels should be disabled or not. */
+  @Input()
+  get disableRipple(): boolean { return this._disableRipple; }
+  set disableRipple(value) { this._disableRipple = coerceBooleanProperty(value); }
+  private _disableRipple: boolean = false;
 
   /** Event emitted when the option is selected. */
   @Output() selectFocusedIndex = new EventEmitter();
@@ -101,9 +120,10 @@ export class MdTabHeader implements AfterContentChecked, AfterContentInit {
   /** Event emitted when a label is focused. */
   @Output() indexFocused = new EventEmitter();
 
-  constructor(private _zone: NgZone,
-              private _elementRef: ElementRef,
-              @Optional() private _dir: Dir) {}
+  constructor(
+    private _elementRef: ElementRef,
+    private _ngZone: NgZone,
+    @Optional() private _dir: Dir) { }
 
   ngAfterContentChecked(): void {
     // If the number of tab labels have changed, check if scrolling should be enabled
@@ -147,7 +167,24 @@ export class MdTabHeader implements AfterContentChecked, AfterContentInit {
    * Aligns the ink bar to the selected tab on load.
    */
   ngAfterContentInit() {
-    this._alignInkBarToSelectedTab();
+    this._realignInkBar = this._ngZone.runOutsideAngular(() => {
+      let dirChange = this._dir ? this._dir.dirChange : Observable.of(null);
+      let resize = typeof window !== 'undefined' ?
+          Observable.fromEvent(window, 'resize').auditTime(10) :
+          Observable.of(null);
+
+      return Observable.merge(dirChange, resize).startWith(null).subscribe(() => {
+        this._updatePagination();
+        this._alignInkBarToSelectedTab();
+      });
+    });
+  }
+
+  ngOnDestroy() {
+    if (this._realignInkBar) {
+      this._realignInkBar.unsubscribe();
+      this._realignInkBar = null;
+    }
   }
 
   /**
@@ -372,10 +409,6 @@ export class MdTabHeader implements AfterContentChecked, AfterContentInit {
         ? this._labelWrappers.toArray()[this.selectedIndex].elementRef.nativeElement
         : null;
 
-    this._zone.runOutsideAngular(() => {
-      requestAnimationFrame(() => {
-        this._inkBar.alignToElement(selectedLabelWrapper);
-      });
-    });
+    this._inkBar.alignToElement(selectedLabelWrapper);
   }
 }

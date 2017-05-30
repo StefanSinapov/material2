@@ -1,28 +1,36 @@
-import {NgModule, ModuleWithProviders} from '@angular/core';
+import {NgModule} from '@angular/core';
 import {CommonModule} from '@angular/common';
-import {MdRippleModule, CompatibilityModule} from '../core';
+import {MdCommonModule, MdRippleModule, StyleModule} from '../core';
 import {
-  MdButton,
   MdAnchor,
+  MdButton,
   MdButtonCssMatStyler,
-  MdRaisedButtonCssMatStyler,
-  MdIconButtonCssMatStyler,
   MdFabCssMatStyler,
+  MdIconButtonCssMatStyler,
   MdMiniFabCssMatStyler,
+  MdRaisedButtonCssMatStyler
 } from './button';
 
 
+export * from './button';
+
+
 @NgModule({
-  imports: [CommonModule, MdRippleModule, CompatibilityModule],
+  imports: [
+    CommonModule,
+    MdRippleModule,
+    MdCommonModule,
+    StyleModule,
+  ],
   exports: [
     MdButton,
     MdAnchor,
-    CompatibilityModule,
+    MdCommonModule,
     MdButtonCssMatStyler,
     MdRaisedButtonCssMatStyler,
     MdIconButtonCssMatStyler,
     MdFabCssMatStyler,
-    MdMiniFabCssMatStyler
+    MdMiniFabCssMatStyler,
   ],
   declarations: [
     MdButton,
@@ -31,18 +39,7 @@ import {
     MdRaisedButtonCssMatStyler,
     MdIconButtonCssMatStyler,
     MdFabCssMatStyler,
-    MdMiniFabCssMatStyler
+    MdMiniFabCssMatStyler,
   ],
 })
-export class MdButtonModule {
-  /** @deprecated */
-  static forRoot(): ModuleWithProviders {
-    return {
-      ngModule: MdButtonModule,
-      providers: []
-    };
-  }
-}
-
-
-export * from './button';
+export class MdButtonModule {}

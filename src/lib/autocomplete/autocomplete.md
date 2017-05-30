@@ -114,7 +114,7 @@ Then bind it to the autocomplete's `displayWith` property.
 
 <md-autocomplete #auto="mdAutocomplete" [displayWith]="displayFn">
    <md-option *ngFor="let option of filteredOptions | async" [value]="option">
-      {{ option }}
+      {{ option.name }}
    </md-option>
 </md-autocomplete>
 ```
@@ -138,7 +138,7 @@ class MyComp {
    }
    
    filter(name: string): User[] {
-      return this.options.filter(option => new RegExp(`^${name}`, 'gi').test(option)); 
+      return this.options.filter(option => new RegExp(`^${name}`, 'gi').test(option.name)); 
    }
    
    displayFn(user: User): string {

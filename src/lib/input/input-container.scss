@@ -1,8 +1,11 @@
 @import '../core/style/variables';
+@import '../core/style/vendor-prefixes';
 @import '../core/style/form-common';
 
 
 $mat-input-floating-placeholder-scale-factor: 0.75 !default;
+$mat-input-wrapper-spacing: 1em !default;
+$mat-input-hint-min-space: 10px !default;
 
 // Gradient for showing the dashed line when the input is disabled.
 $mat-input-underline-disabled-background-image:
@@ -11,7 +14,7 @@ $mat-input-underline-disabled-background-image:
 // Applies a floating placeholder above the input itself.
 @mixin mat-input-placeholder-floating {
   display: block;
-  transform: translateY(-1.35em) scale($mat-input-floating-placeholder-scale-factor);
+  transform: translate3d(0, -1.35em, 0) scale($mat-input-floating-placeholder-scale-factor);
   width: 100% / $mat-input-floating-placeholder-scale-factor;
 }
 
@@ -27,12 +30,21 @@ $mat-input-underline-disabled-background-image:
   [dir='rtl'] & {
     text-align: right;
   }
+
+  // Allow icons in a prefix/suffix/hint/etc to adapt to the correct size.
+  & .mat-icon,
+  & .mat-datepicker-toggle {
+    width: 1em;
+    height: 1em;
+    font-size: 100%;
+    vertical-align: top;
+  }
 }
 
 // Global wrapper. We need to apply margin to the element for spacing, but
 // cannot apply it to the host element directly.
 .mat-input-wrapper {
-  margin: 1em 0;
+  margin: $mat-input-wrapper-spacing 0;
   // Account for the underline which has 4px of margin + 2px of border.
   padding-bottom: 6px;
 }
@@ -74,6 +86,9 @@ $mat-input-underline-disabled-background-image:
   padding: 0;
   width: 100%;
 
+  // Needed to make last line of the textarea line up with the baseline.
+  vertical-align: bottom;
+
   .mat-end & {
     text-align: right;
 
@@ -96,22 +111,16 @@ $mat-input-underline-disabled-background-image:
   // Assumes the autofill is non-empty.
   &:-webkit-autofill + .mat-input-placeholder-wrapper .mat-float {
     @include mat-input-placeholder-floating;
+    transition: none;
   }
 
   // Note that we can't use something like visibility: hidden or
   // display: none, because IE ends up preventing the user from
   // focusing the input altogether.
-  &::placeholder {
-    color: transparent;
-  }
-  &::-moz-placeholder {
-    color: transparent;
-  }
-  &::-webkit-input-placeholder {
-    color: transparent;
-  }
-  &:-ms-input-placeholder {
-    color: transparent;
+  @include input-placeholder {
+    // Needs to be !important, because the placeholder will end up inheriting the
+    // input color in IE, if the consumer overrides it with a higher specificity.
+    color: transparent !important;
   }
 }
 
@@ -135,9 +144,9 @@ $mat-input-underline-disabled-background-image:
   display: none;
   white-space: nowrap;
   text-overflow: ellipsis;
-  overflow-x: hidden;
+  overflow: hidden;
 
-  transform: translateY(0);
+  transform: translate3d(0, 0, 0);
   transform-origin: bottom left;
   transition: transform $swift-ease-out-duration $swift-ease-out-timing-function,
               color $swift-ease-out-duration $swift-ease-out-timing-function,
@@ -160,6 +169,12 @@ $mat-input-underline-disabled-background-image:
   }
 }
 
+// Disable the placeholder animation when the input is not empty (this prevents placeholder
+// animating up when the value is set programmatically).
+.mat-input-placeholder:not(.mat-empty) {
+  transition: none;
+}
+
 // Used to hide the placeholder overflow on IE, since IE doesn't take transform into account when
 // determining overflow.
 .mat-input-placeholder-wrapper {
@@ -170,6 +185,7 @@ $mat-input-underline-disabled-background-image:
   padding-top: 1em;
   overflow: hidden;
   pointer-events: none;  // We shouldn't catch mouse events (let them through).
+  transform: translate3d(0, 0, 0); // Prevents the label from shifting after the animation is done.
 
   // Keeps the element height since the placeholder text is `position: absolute`.
   &::after {
@@ -201,49 +217,51 @@ $mat-input-underline-disabled-background-image:
     z-index: 1;
     top: -1px;
     width: 100%;
-    transform-origin: top;
-    opacity: 0;
-    transition: opacity $swift-ease-out-duration $swift-ease-out-timing-function;
+    transform-origin: 50%;
+    transform: scaleX(0.5);
+    visibility: hidden;
+    transition: background-color $swift-ease-in-duration $swift-ease-in-timing-function;
 
-    .mat-focused & {
-      opacity: 1;
+    .mat-focused &,
+    .mat-input-invalid & {
+      visibility: visible;
+      transform: scaleX(1);
+      transition: transform 150ms linear,
+                  background-color $swift-ease-in-duration $swift-ease-in-timing-function;
     }
   }
 }
 
-// The hint is shown below the underline. There can be more than one; one at the start
-// and one at the end.
-.mat-hint {
-  display: block;
+// Wrapper for the hints and error messages. Provides positioning and text size.
+// Note that we're using `top` in order to allow for stacked children to flow downwards.
+.mat-input-subscript-wrapper {
+  $line-height: 1.2em;
+
   position: absolute;
   font-size: 75%;
-  bottom: 0;
+  top: 100%;
+  width: 100%;
+  margin-top: -$line-height;
+  line-height: $line-height;
+  overflow: hidden; // prevents multi-line errors from overlapping the input
+}
 
-  &.mat-right {
-    right: 0;
-  }
+// Clears the floats on the hints. This is necessary for the hint animation to work.
+.mat-input-hint-wrapper {
+  display: flex;
+}
 
-  [dir='rtl'] & {
-    right: 0;
-    left: auto;
+.mat-input-hint-spacer {
+  flex: 1 0 $mat-input-hint-min-space;
+}
 
-    &.mat-right {
-      right: auto;
-      left: 0;
-    }
-  }
+// Single error message displayed beneath the input.
+.mat-input-error {
+  display: block;
 }
 
 .mat-input-prefix, .mat-input-suffix {
   // Prevents the prefix and suffix from stretching together with the container.
   width: 0.1px;
   white-space: nowrap;
-
-  // Allow icons in a prefix/suffix to adapt to the correct size.
-  & .mat-icon {
-    width: auto;
-    height: auto;
-    font-size: 100%;
-    vertical-align: top;
-  }
 }

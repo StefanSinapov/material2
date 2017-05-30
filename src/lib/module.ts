@@ -1,14 +1,13 @@
-import {NgModule, ModuleWithProviders} from '@angular/core';
+import {NgModule} from '@angular/core';
 
 import {
-  MdRippleModule,
-  RtlModule,
-  ObserveContentModule,
-  PortalModule,
-  OverlayModule,
   A11yModule,
-  ProjectionModule,
-  CompatibilityModule,
+  MdCommonModule,
+  MdRippleModule,
+  ObserveContentModule,
+  OverlayModule,
+  PortalModule,
+  RtlModule
 } from './core/index';
 
 import {MdButtonToggleModule} from './button-toggle/index';
@@ -36,6 +35,8 @@ import {MdDialogModule} from './dialog/index';
 import {PlatformModule} from './core/platform/index';
 import {MdAutocompleteModule} from './autocomplete/index';
 import {StyleModule} from './core/style/index';
+import {MdDatepickerModule} from './datepicker/index';
+import {CdkDataTableModule} from './core/data-table/index';
 
 const MATERIAL_MODULES = [
   MdAutocompleteModule,
@@ -44,6 +45,7 @@ const MATERIAL_MODULES = [
   MdCardModule,
   MdChipsModule,
   MdCheckboxModule,
+  MdDatepickerModule,
   MdDialogModule,
   MdGridListModule,
   MdIconModule,
@@ -68,60 +70,14 @@ const MATERIAL_MODULES = [
   StyleModule,
   A11yModule,
   PlatformModule,
-  ProjectionModule,
-  CompatibilityModule,
-  ObserveContentModule
+  MdCommonModule,
+  ObserveContentModule,
+  CdkDataTableModule
 ];
 
-@NgModule({
-  imports: [
-    MdAutocompleteModule.forRoot(),
-    MdButtonModule.forRoot(),
-    MdCardModule.forRoot(),
-    MdChipsModule.forRoot(),
-    MdCheckboxModule.forRoot(),
-    MdGridListModule.forRoot(),
-    MdInputModule.forRoot(),
-    MdListModule.forRoot(),
-    MdProgressBarModule.forRoot(),
-    MdProgressSpinnerModule.forRoot(),
-    MdRippleModule.forRoot(),
-    MdSelectModule.forRoot(),
-    MdSidenavModule.forRoot(),
-    MdTabsModule.forRoot(),
-    MdToolbarModule.forRoot(),
-    PortalModule.forRoot(),
-    ProjectionModule.forRoot(),
-    RtlModule.forRoot(),
-    ObserveContentModule.forRoot(),
-
-    // These modules include providers.
-    A11yModule.forRoot(),
-    MdButtonToggleModule.forRoot(),
-    MdDialogModule.forRoot(),
-    MdIconModule.forRoot(),
-    MdMenuModule.forRoot(),
-    MdRadioModule.forRoot(),
-    MdSliderModule.forRoot(),
-    MdSlideToggleModule.forRoot(),
-    MdSnackBarModule.forRoot(),
-    MdTooltipModule.forRoot(),
-    PlatformModule.forRoot(),
-    OverlayModule.forRoot(),
-    CompatibilityModule.forRoot(),
-  ],
-  exports: MATERIAL_MODULES,
-})
-export class MaterialRootModule { }
-
-
+/** @deprecated */
 @NgModule({
   imports: MATERIAL_MODULES,
   exports: MATERIAL_MODULES,
 })
-export class MaterialModule {
-  /** @deprecated */
-  static forRoot(): ModuleWithProviders {
-    return {ngModule: MaterialRootModule};
-  }
-}
+export class MaterialModule {}

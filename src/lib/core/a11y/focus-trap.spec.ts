@@ -9,7 +9,13 @@ describe('FocusTrap', () => {
 
   beforeEach(async(() => {
     TestBed.configureTestingModule({
-      declarations: [FocusTrapDirective, FocusTrapWithBindings, SimpleFocusTrap, FocusTrapTargets],
+      declarations: [
+        FocusTrapDirective,
+        FocusTrapWithBindings,
+        SimpleFocusTrap,
+        FocusTrapTargets,
+        FocusTrapWithSvg,
+      ],
       providers: [InteractivityChecker, Platform, FocusTrapFactory]
     });
 
@@ -98,6 +104,13 @@ describe('FocusTrap', () => {
       focusTrapInstance = fixture.componentInstance.focusTrapDirective.focusTrap;
     });
 
+    it('should be able to set initial focus target', () => {
+      // Because we can't mimic a real tab press focus change in a unit test, just call the
+      // focus event handler directly.
+      focusTrapInstance.focusInitialElement();
+      expect(document.activeElement.id).toBe('middle');
+    });
+
     it('should be able to prioritize the first focus target', () => {
       // Because we can't mimic a real tab press focus change in a unit test, just call the
       // focus event handler directly.
@@ -110,6 +123,19 @@ describe('FocusTrap', () => {
       // focus event handler directly.
       focusTrapInstance.focusLastTabbableElement();
       expect(document.activeElement.id).toBe('last');
+    });
+  });
+
+  describe('special cases', () => {
+    it('should not throw when it has a SVG child', () => {
+      let fixture = TestBed.createComponent(FocusTrapWithSvg);
+
+      fixture.detectChanges();
+
+      let focusTrapInstance = fixture.componentInstance.focusTrapDirective.focusTrap;
+
+      expect(() => focusTrapInstance.focusFirstTabbableElement()).not.toThrow();
+      expect(() => focusTrapInstance.focusLastTabbableElement()).not.toThrow();
     });
   });
 });
@@ -147,12 +173,29 @@ class FocusTrapWithBindings {
   template: `
     <div cdkTrapFocus>
       <input>
-      <button id="last" cdk-focus-end></button>
-      <button id="first" cdk-focus-start>SAVE</button>
+      <button>before</button>
+      <button id="first" cdk-focus-region-start></button>
+      <button id="middle" cdk-focus-initial></button>
+      <button id="last" cdk-focus-region-end></button>
+      <button>after</button>
       <input>
     </div>
     `
 })
 class FocusTrapTargets {
+  @ViewChild(FocusTrapDirective) focusTrapDirective: FocusTrapDirective;
+}
+
+
+@Component({
+  template: `
+    <div cdkTrapFocus>
+      <svg xmlns="http://www.w3.org/2000/svg">
+        <circle cx="100" cy="100" r="100"/>
+      </svg>
+    </div>
+    `
+})
+class FocusTrapWithSvg {
   @ViewChild(FocusTrapDirective) focusTrapDirective: FocusTrapDirective;
 }

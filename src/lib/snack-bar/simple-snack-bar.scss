@@ -2,7 +2,9 @@
 @import '../core/style/button-common';
 @import '../core/style/list-common';
 
-:host {
+$mat-snack-bar-button-margin: 48px !default;
+
+.mat-simple-snackbar {
   display: flex;
   justify-content: space-between;
   color: white;
@@ -13,23 +15,22 @@
   }
 }
 
-.mat-simple-snackbar-message {
-  @include mat-truncate-line;
-}
-
 .mat-simple-snackbar-action {
   @include mat-button-reset;
 
   background: none;
-  margin: -5px 0 0;
-  padding: 5px;
-  text-transform: uppercase;
   color: inherit;
-  line-height: inherit;
+  line-height: 1;
   flex-shrink: 0;
+  margin-left: $mat-snack-bar-button-margin;
   font: {
     family: inherit;
     size: inherit;
     weight: 600;
+  }
+
+  [dir='rtl'] & {
+    margin-right: $mat-snack-bar-button-margin;
+    margin-left: 0;
   }
 }

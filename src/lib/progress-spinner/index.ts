@@ -1,42 +1,27 @@
-import {NgModule, ModuleWithProviders} from '@angular/core';
-import {CompatibilityModule} from '../core';
+import {NgModule} from '@angular/core';
+import {MdCommonModule} from '../core';
 import {
   MdProgressSpinner,
   MdSpinner,
   MdProgressSpinnerCssMatStyler,
-  MdProgressCircleCssMatStyler
 } from './progress-spinner';
 
 
 @NgModule({
-  imports: [CompatibilityModule],
+  imports: [MdCommonModule],
   exports: [
     MdProgressSpinner,
     MdSpinner,
-    CompatibilityModule,
-    MdProgressSpinnerCssMatStyler,
-    MdProgressCircleCssMatStyler
+    MdCommonModule,
+    MdProgressSpinnerCssMatStyler
   ],
   declarations: [
     MdProgressSpinner,
     MdSpinner,
-    MdProgressSpinnerCssMatStyler,
-    MdProgressCircleCssMatStyler
+    MdProgressSpinnerCssMatStyler
   ],
 })
-class MdProgressSpinnerModule {
-  /** @deprecated */
-  static forRoot(): ModuleWithProviders {
-    return {
-      ngModule: MdProgressSpinnerModule,
-      providers: []
-    };
-  }
-}
+class MdProgressSpinnerModule {}
 
 export {MdProgressSpinnerModule};
 export * from './progress-spinner';
-
-/** @deprecated */
-export {MdProgressSpinnerModule as MdProgressCircleModule};
-export {MdProgressSpinner as MdProgressCircle};

@@ -2,6 +2,7 @@ import {inject, fakeAsync, tick, ComponentFixture, TestBed} from '@angular/core/
 import {Component} from '@angular/core';
 import {By} from '@angular/platform-browser';
 import {LiveAnnouncer, LIVE_ANNOUNCER_ELEMENT_TOKEN} from './live-announcer';
+import {A11yModule} from '../index';
 
 
 describe('LiveAnnouncer', () => {
@@ -11,8 +12,8 @@ describe('LiveAnnouncer', () => {
 
   describe('with default element', () => {
     beforeEach(() => TestBed.configureTestingModule({
+      imports: [A11yModule],
       declarations: [TestApp],
-      providers: [LiveAnnouncer]
     }));
 
     beforeEach(fakeAsync(inject([LiveAnnouncer], (la: LiveAnnouncer) => {
@@ -77,11 +78,9 @@ describe('LiveAnnouncer', () => {
       customLiveElement = document.createElement('div');
 
       return TestBed.configureTestingModule({
+        imports: [A11yModule],
         declarations: [TestApp],
-        providers: [
-          {provide: LIVE_ANNOUNCER_ELEMENT_TOKEN, useValue: customLiveElement},
-          LiveAnnouncer,
-        ],
+        providers: [{provide: LIVE_ANNOUNCER_ELEMENT_TOKEN, useValue: customLiveElement}],
       });
     });
 
@@ -109,7 +108,7 @@ function getLiveElement(): Element {
 
 @Component({template: `<button (click)="announceText('Test')">Announce</button>`})
 class TestApp {
-  constructor(public live: LiveAnnouncer) { };
+  constructor(public live: LiveAnnouncer) { }
 
   announceText(message: string) {
     this.live.announce(message);

@@ -1,9 +1,11 @@
 import {TestBed, ComponentFixture, fakeAsync, tick, inject} from '@angular/core/testing';
 import {Component, ViewChild} from '@angular/core';
-import {MdRipple, MdRippleModule, MD_DISABLE_RIPPLES, RippleState} from './index';
 import {ViewportRuler} from '../overlay/position/viewport-ruler';
 import {RIPPLE_FADE_OUT_DURATION, RIPPLE_FADE_IN_DURATION} from './ripple-renderer';
 import {dispatchMouseEvent} from '../testing/dispatch-events';
+import {
+  MdRipple, MdRippleModule, MD_RIPPLE_GLOBAL_OPTIONS, RippleState, RippleGlobalOptions
+} from './index';
 
 /** Extracts the numeric value of a pixel size string like '123px'.  */
 const pxStringToFloat = (s: string) => {
@@ -16,12 +18,16 @@ describe('MdRipple', () => {
   let originalBodyMargin: string;
   let viewportRuler: ViewportRuler;
 
+  const startingWindowWidth = window.innerWidth;
+  const startingWindowHeight = window.innerHeight;
+
   beforeEach(() => {
     TestBed.configureTestingModule({
       imports: [MdRippleModule],
       declarations: [
         BasicRippleContainer,
         RippleContainerWithInputBindings,
+        RippleContainerWithoutBindings,
         RippleContainerWithNgIf,
       ],
     });
@@ -51,6 +57,43 @@ describe('MdRipple', () => {
 
       rippleTarget = fixture.nativeElement.querySelector('[mat-ripple]');
       rippleDirective = fixture.componentInstance.ripple;
+    });
+
+    it('sizes ripple to cover element', () => {
+      // In the iOS simulator (BrowserStack & SauceLabs), adding the content to the
+      // body causes karma's iframe for the test to stretch to fit that content once we attempt to
+      // scroll the page. Setting width / height / maxWidth / maxHeight on the iframe does not
+      // successfully constrain its size. As such, skip assertions in environments where the
+      // window size has changed since the start of the test.
+      if (window.innerWidth > startingWindowWidth || window.innerHeight > startingWindowHeight) {
+        return;
+      }
+
+      let elementRect = rippleTarget.getBoundingClientRect();
+
+      // Dispatch a ripple at the following relative coordinates (X: 50| Y: 75)
+      dispatchMouseEvent(rippleTarget, 'mousedown', 50, 75);
+      dispatchMouseEvent(rippleTarget, 'mouseup');
+
+      // Calculate distance from the click to farthest edge of the ripple target.
+      let maxDistanceX = TARGET_WIDTH - 50;
+      let maxDistanceY = TARGET_HEIGHT - 75;
+
+      // At this point the foreground ripple should be created with a div centered at the click
+      // location, and large enough to reach the furthest corner, which is 250px to the right
+      // and 125px down relative to the click position.
+      let expectedRadius = Math.sqrt(maxDistanceX * maxDistanceX + maxDistanceY * maxDistanceY);
+      let expectedLeft = elementRect.left + 50 - expectedRadius;
+      let expectedTop = elementRect.top + 75 - expectedRadius;
+
+      let ripple = rippleTarget.querySelector('.mat-ripple-element') as HTMLElement;
+
+      // Note: getBoundingClientRect won't work because there's a transform applied to make the
+      // ripple start out tiny.
+      expect(pxStringToFloat(ripple.style.left)).toBeCloseTo(expectedLeft, 1);
+      expect(pxStringToFloat(ripple.style.top)).toBeCloseTo(expectedTop, 1);
+      expect(pxStringToFloat(ripple.style.width)).toBeCloseTo(2 * expectedRadius, 1);
+      expect(pxStringToFloat(ripple.style.height)).toBeCloseTo(2 * expectedRadius, 1);
     });
 
     it('creates ripple on mousedown', () => {
@@ -134,35 +177,6 @@ describe('MdRipple', () => {
       expect(parseFloat(rippleElement.style.top)).toBeCloseTo(TARGET_HEIGHT / 2 - radius, 1);
     });
 
-    it('sizes ripple to cover element', () => {
-      let elementRect = rippleTarget.getBoundingClientRect();
-
-      // Dispatch a ripple at the following relative coordinates (X: 50| Y: 75)
-      dispatchMouseEvent(rippleTarget, 'mousedown', 50, 75);
-      dispatchMouseEvent(rippleTarget, 'mouseup');
-
-      // Calculate distance from the click to farthest edge of the ripple target.
-      let maxDistanceX = TARGET_WIDTH - 50;
-      let maxDistanceY = TARGET_HEIGHT - 75;
-
-      // At this point the foreground ripple should be created with a div centered at the click
-      // location, and large enough to reach the furthest corner, which is 250px to the right
-      // and 125px down relative to the click position.
-      let expectedRadius = Math.sqrt(maxDistanceX * maxDistanceX + maxDistanceY * maxDistanceY);
-      let expectedLeft = elementRect.left + 50 - expectedRadius;
-      let expectedTop = elementRect.top + 75 - expectedRadius;
-
-      let ripple = rippleTarget.querySelector('.mat-ripple-element') as HTMLElement;
-
-      // Note: getBoundingClientRect won't work because there's a transform applied to make the
-      // ripple start out tiny.
-      expect(pxStringToFloat(ripple.style.left)).toBeCloseTo(expectedLeft, 1);
-      expect(pxStringToFloat(ripple.style.top)).toBeCloseTo(expectedTop, 1);
-      expect(pxStringToFloat(ripple.style.width)).toBeCloseTo(2 * expectedRadius, 1);
-      expect(pxStringToFloat(ripple.style.height)).toBeCloseTo(2 * expectedRadius, 1);
-    });
-
-
     it('cleans up the event handlers when the container gets destroyed', () => {
       fixture = TestBed.createComponent(RippleContainerWithNgIf);
       fixture.detectChanges();
@@ -190,9 +204,6 @@ describe('MdRipple', () => {
     });
 
     describe('when page is scrolled', () => {
-      const startingWindowWidth = window.innerWidth;
-      const startingWindowHeight = window.innerHeight;
-
       let veryLargeElement: HTMLDivElement = document.createElement('div');
       let pageScrollTop = 500;
       let pageScrollLeft = 500;
@@ -346,29 +357,44 @@ describe('MdRipple', () => {
 
   });
 
-  describe('with ripples disabled', () => {
+  describe('global ripple options', () => {
     let rippleDirective: MdRipple;
 
-    beforeEach(() => {
-      // Reset the previously configured testing module to be able to disable ripples globally.
+    function createTestComponent(rippleConfig: RippleGlobalOptions,
+                                 testComponent: any = BasicRippleContainer) {
+      // Reset the previously configured testing module to be able set new providers.
       // The testing module has been initialized in the root describe group for the ripples.
       TestBed.resetTestingModule();
       TestBed.configureTestingModule({
         imports: [MdRippleModule],
-        declarations: [BasicRippleContainer],
-        providers: [{ provide: MD_DISABLE_RIPPLES, useValue: true }]
+        declarations: [testComponent],
+        providers: [{ provide: MD_RIPPLE_GLOBAL_OPTIONS, useValue: rippleConfig }]
       });
-    });
 
-    beforeEach(() => {
-      fixture = TestBed.createComponent(BasicRippleContainer);
+      fixture = TestBed.createComponent(testComponent);
       fixture.detectChanges();
 
       rippleTarget = fixture.nativeElement.querySelector('[mat-ripple]');
       rippleDirective = fixture.componentInstance.ripple;
+    }
+
+    it('should work without having any binding set', () => {
+      createTestComponent({ disabled: true }, RippleContainerWithoutBindings);
+
+      dispatchMouseEvent(rippleTarget, 'mousedown');
+      dispatchMouseEvent(rippleTarget, 'mouseup');
+
+      expect(rippleTarget.querySelectorAll('.mat-ripple-element').length).toBe(0);
+
+      dispatchMouseEvent(rippleTarget, 'mousedown');
+      dispatchMouseEvent(rippleTarget, 'mouseup');
+
+      expect(rippleTarget.querySelectorAll('.mat-ripple-element').length).toBe(0);
     });
 
-    it('should not show any ripples on mousedown', () => {
+    it('when disabled should not show any ripples on mousedown', () => {
+      createTestComponent({ disabled: true });
+
       dispatchMouseEvent(rippleTarget, 'mousedown');
       dispatchMouseEvent(rippleTarget, 'mouseup');
 
@@ -380,13 +406,50 @@ describe('MdRipple', () => {
       expect(rippleTarget.querySelectorAll('.mat-ripple-element').length).toBe(0);
     });
 
-    it('should still allow manual ripples', () => {
+    it('when disabled should still allow manual ripples', () => {
+      createTestComponent({ disabled: true });
+
       expect(rippleTarget.querySelectorAll('.mat-ripple-element').length).toBe(0);
 
       rippleDirective.launch(0, 0);
 
       expect(rippleTarget.querySelectorAll('.mat-ripple-element').length).toBe(1);
     });
+
+    it('should support changing the baseSpeedFactor', fakeAsync(() => {
+      createTestComponent({ baseSpeedFactor: 0.5 });
+
+      dispatchMouseEvent(rippleTarget, 'mousedown');
+      dispatchMouseEvent(rippleTarget, 'mouseup');
+
+      expect(rippleTarget.querySelectorAll('.mat-ripple-element').length).toBe(1);
+
+      // Calculates the speedFactor for the duration. Those factors needs to be inverted, because
+      // a lower speed factor, will make the duration longer. For example: 0.5 => 2x duration.
+      let fadeInFactor = 1 / 0.5;
+
+      // Calculates the duration for fading-in and fading-out the ripple.
+      tick(RIPPLE_FADE_IN_DURATION * fadeInFactor + RIPPLE_FADE_OUT_DURATION);
+
+      expect(rippleTarget.querySelectorAll('.mat-ripple-element').length).toBe(0);
+    }));
+
+    it('should combine individual speed factor with baseSpeedFactor', fakeAsync(() => {
+      createTestComponent({ baseSpeedFactor: 0.5 });
+
+      rippleDirective.launch(0, 0, { speedFactor: 1.5 });
+
+      expect(rippleTarget.querySelectorAll('.mat-ripple-element').length).toBe(1);
+
+      // Calculates the speedFactor for the duration. Those factors needs to be inverted, because
+      // a lower speed factor, will make the duration longer. For example: 0.5 => 2x duration.
+      let fadeInFactor = 1 / (0.5 * 1.5);
+
+      // Calculates the duration for fading-in and fading-out the ripple.
+      tick(RIPPLE_FADE_IN_DURATION * fadeInFactor + RIPPLE_FADE_OUT_DURATION);
+
+      expect(rippleTarget.querySelectorAll('.mat-ripple-element').length).toBe(0);
+    }));
 
   });
 
@@ -537,6 +600,11 @@ class RippleContainerWithInputBindings {
   color = '';
   @ViewChild(MdRipple) ripple: MdRipple;
 }
+
+@Component({
+  template: `<div id="container" #ripple="mdRipple" mat-ripple></div>`,
+})
+class RippleContainerWithoutBindings {}
 
 @Component({ template: `<div id="container" mat-ripple [mdRippleSpeedFactor]="0"
                              *ngIf="!isDestroyed"></div>` })

@@ -1,19 +1,19 @@
 import {async, ComponentFixture, TestBed} from '@angular/core/testing';
-import {ReactiveFormsModule, FormControl, FormsModule} from '@angular/forms';
+import {FormControl, FormsModule, ReactiveFormsModule} from '@angular/forms';
 import {Component, DebugElement} from '@angular/core';
 import {By, HAMMER_GESTURE_CONFIG} from '@angular/platform-browser';
 import {MdSlider, MdSliderModule} from './index';
 import {TestGestureConfig} from './test-gesture-config';
 import {RtlModule} from '../core/rtl/dir';
 import {
-  UP_ARROW,
-  RIGHT_ARROW,
   DOWN_ARROW,
-  PAGE_DOWN,
-  PAGE_UP,
   END,
   HOME,
-  LEFT_ARROW
+  LEFT_ARROW,
+  PAGE_DOWN,
+  PAGE_UP,
+  RIGHT_ARROW,
+  UP_ARROW
 } from '../core/keyboard/keycodes';
 import {dispatchKeyboardEvent, dispatchMouseEvent} from '../core/testing/dispatch-events';
 
@@ -23,7 +23,7 @@ describe('MdSlider', () => {
 
   beforeEach(async(() => {
     TestBed.configureTestingModule({
-      imports: [MdSliderModule.forRoot(), RtlModule.forRoot(), ReactiveFormsModule, FormsModule],
+      imports: [MdSliderModule, ReactiveFormsModule, FormsModule, RtlModule],
       declarations: [
         StandardSlider,
         DisabledSlider,
@@ -129,28 +129,6 @@ describe('MdSlider', () => {
       expect(trackFillElement.style.transform).toContain('scaleX(0.86)');
     });
 
-    it('should add the mat-slider-active class on click', () => {
-      expect(sliderNativeElement.classList).not.toContain('mat-slider-active');
-
-      dispatchClickEventSequence(sliderNativeElement, 0.23);
-      fixture.detectChanges();
-
-      expect(sliderNativeElement.classList).toContain('mat-slider-active');
-    });
-
-    it('should remove the mat-slider-active class on blur', () => {
-      dispatchClickEventSequence(sliderNativeElement, 0.95);
-      fixture.detectChanges();
-
-      expect(sliderNativeElement.classList).toContain('mat-slider-active');
-
-      // Call the `onBlur` handler directly because we cannot simulate a focus event in unit tests.
-      sliderInstance._onBlur();
-      fixture.detectChanges();
-
-      expect(sliderNativeElement.classList).not.toContain('mat-slider-active');
-    });
-
     it('should add and remove the mat-slider-sliding class when sliding', () => {
       expect(sliderNativeElement.classList).not.toContain('mat-slider-sliding');
 
@@ -167,11 +145,6 @@ describe('MdSlider', () => {
 
     it('should have thumb gap when at min value', () => {
       expect(trackFillElement.style.transform).toContain('translateX(-7px)');
-
-      dispatchClickEventSequence(sliderNativeElement, 0);
-      fixture.detectChanges();
-
-      expect(trackFillElement.style.transform).toContain('translateX(-10px)');
     });
 
     it('should not have thumb gap when not at min value', () => {
@@ -180,6 +153,10 @@ describe('MdSlider', () => {
 
       // Some browsers use '0' and some use '0px', so leave off the closing paren.
       expect(trackFillElement.style.transform).toContain('translateX(0');
+    });
+
+    it('should have aria-orientation horizontal', () => {
+      expect(sliderNativeElement.getAttribute('aria-orientation')).toEqual('horizontal');
     });
   });
 
@@ -263,7 +240,7 @@ describe('MdSlider', () => {
       sliderDebugElement = fixture.debugElement.query(By.directive(MdSlider));
       testComponent = fixture.debugElement.componentInstance;
       sliderNativeElement = sliderDebugElement.nativeElement;
-      sliderInstance = sliderDebugElement.injector.get(MdSlider);
+      sliderInstance = sliderDebugElement.injector.get<MdSlider>(MdSlider);
       sliderWrapperElement = <HTMLElement>sliderNativeElement.querySelector('.mat-slider-wrapper');
       trackFillElement = <HTMLElement>sliderNativeElement.querySelector('.mat-slider-track-fill');
       ticksContainerElement =
@@ -358,7 +335,7 @@ describe('MdSlider', () => {
 
       sliderDebugElement = fixture.debugElement.query(By.directive(MdSlider));
       sliderNativeElement = sliderDebugElement.nativeElement;
-      sliderInstance = sliderDebugElement.injector.get(MdSlider);
+      sliderInstance = sliderDebugElement.injector.get<MdSlider>(MdSlider);
       sliderWrapperElement = <HTMLElement>sliderNativeElement.querySelector('.mat-slider-wrapper');
     });
 
@@ -397,7 +374,7 @@ describe('MdSlider', () => {
 
       sliderDebugElement = fixture.debugElement.query(By.directive(MdSlider));
       sliderNativeElement = sliderDebugElement.nativeElement;
-      sliderInstance = sliderDebugElement.injector.get(MdSlider);
+      sliderInstance = sliderDebugElement.injector.get<MdSlider>(MdSlider);
       sliderWrapperElement = <HTMLElement>sliderNativeElement.querySelector('.mat-slider-wrapper');
       trackFillElement = <HTMLElement>sliderNativeElement.querySelector('.mat-slider-track-fill');
     });
@@ -517,6 +494,17 @@ describe('MdSlider', () => {
       expect(ticksElement.style.transform).toContain('translateX(9%)');
       expect(ticksContainerElement.style.transform).toBe('translateX(-9%)');
     });
+
+    it('should be able to reset the tick interval after it has been set', () => {
+      expect(sliderNativeElement.classList)
+          .toContain('mat-slider-has-ticks', 'Expected element to have ticks initially.');
+
+      fixture.componentInstance.tickInterval = null;
+      fixture.detectChanges();
+
+      expect(sliderNativeElement.classList)
+          .not.toContain('mat-slider-has-ticks', 'Expected element not to have ticks after reset.');
+    });
   });
 
   describe('slider with thumb label', () => {
@@ -561,29 +549,6 @@ describe('MdSlider', () => {
       // The thumb label text is set to the slider's value. These should always be the same.
       expect(thumbLabelTextElement.textContent).toBe(`${sliderInstance.value}`);
     });
-
-    it('should show the thumb label on click', () => {
-      expect(sliderNativeElement.classList).not.toContain('mat-slider-active');
-      expect(sliderNativeElement.classList).toContain('mat-slider-thumb-label-showing');
-
-      dispatchClickEventSequence(sliderNativeElement, 0.49);
-      fixture.detectChanges();
-
-      // The thumb label appears when the slider is active and the 'mat-slider-thumb-label-showing'
-      // class is applied.
-      expect(sliderNativeElement.classList).toContain('mat-slider-thumb-label-showing');
-      expect(sliderNativeElement.classList).toContain('mat-slider-active');
-    });
-
-    it('should show the thumb label on slide', () => {
-      expect(sliderNativeElement.classList).not.toContain('mat-slider-active');
-
-      dispatchSlideEventSequence(sliderNativeElement, 0, 0.91, gestureConfig);
-      fixture.detectChanges();
-
-      expect(sliderNativeElement.classList).toContain('mat-slider-thumb-label-showing');
-      expect(sliderNativeElement.classList).toContain('mat-slider-active');
-    });
   });
 
   describe('slider as a custom form control', () => {
@@ -602,7 +567,7 @@ describe('MdSlider', () => {
 
       sliderDebugElement = fixture.debugElement.query(By.directive(MdSlider));
       sliderNativeElement = sliderDebugElement.nativeElement;
-      sliderInstance = sliderDebugElement.injector.get(MdSlider);
+      sliderInstance = sliderDebugElement.injector.get<MdSlider>(MdSlider);
       sliderWrapperElement = <HTMLElement>sliderNativeElement.querySelector('.mat-slider-wrapper');
     });
 
@@ -704,7 +669,7 @@ describe('MdSlider', () => {
 
       sliderDebugElement = fixture.debugElement.query(By.directive(MdSlider));
       sliderNativeElement = sliderDebugElement.nativeElement;
-      sliderInstance = sliderDebugElement.injector.get(MdSlider);
+      sliderInstance = sliderDebugElement.injector.get<MdSlider>(MdSlider);
       sliderWrapperElement = <HTMLElement>sliderNativeElement.querySelector('.mat-slider-wrapper');
     });
 
@@ -753,7 +718,7 @@ describe('MdSlider', () => {
 
       sliderDebugElement = fixture.debugElement.query(By.directive(MdSlider));
       sliderNativeElement = sliderDebugElement.nativeElement;
-      sliderInstance = sliderDebugElement.injector.get(MdSlider);
+      sliderInstance = sliderDebugElement.injector.get<MdSlider>(MdSlider);
       sliderWrapperElement = <HTMLElement>sliderNativeElement.querySelector('.mat-slider-wrapper');
       trackFillElement = <HTMLElement>sliderNativeElement.querySelector('.mat-slider-track-fill');
     });
@@ -945,7 +910,7 @@ describe('MdSlider', () => {
       sliderDebugElement = fixture.debugElement.query(By.directive(MdSlider));
       sliderNativeElement = sliderDebugElement.nativeElement;
       sliderWrapperElement = <HTMLElement>sliderNativeElement.querySelector('.mat-slider-wrapper');
-      sliderInstance = sliderDebugElement.injector.get(MdSlider);
+      sliderInstance = sliderDebugElement.injector.get<MdSlider>(MdSlider);
     });
 
     it('should increment slider by 1 on up arrow pressed', () => {
@@ -1027,7 +992,7 @@ describe('MdSlider', () => {
 
       testComponent = fixture.debugElement.componentInstance;
       sliderDebugElement = fixture.debugElement.query(By.directive(MdSlider));
-      sliderInstance = sliderDebugElement.injector.get(MdSlider);
+      sliderInstance = sliderDebugElement.injector.get<MdSlider>(MdSlider);
       sliderNativeElement = sliderDebugElement.nativeElement;
       sliderWrapperElement = <HTMLElement>sliderNativeElement.querySelector('.mat-slider-wrapper');
     });
@@ -1152,7 +1117,7 @@ describe('MdSlider', () => {
 
       testComponent = fixture.debugElement.componentInstance;
       sliderDebugElement = fixture.debugElement.query(By.directive(MdSlider));
-      sliderInstance = sliderDebugElement.injector.get(MdSlider);
+      sliderInstance = sliderDebugElement.injector.get<MdSlider>(MdSlider);
       sliderNativeElement = sliderDebugElement.nativeElement;
       sliderWrapperElement = <HTMLElement>sliderNativeElement.querySelector('.mat-slider-wrapper');
       trackFillElement = <HTMLElement>sliderNativeElement.querySelector('.mat-slider-track-fill');
@@ -1194,6 +1159,10 @@ describe('MdSlider', () => {
       fixture.detectChanges();
 
       expect(trackFillElement.style.transform).toContain('scaleY(0.39)');
+    });
+
+    it('should have aria-orientation vertical', () => {
+      expect(sliderNativeElement.getAttribute('aria-orientation')).toEqual('vertical');
     });
   });
 });
@@ -1248,10 +1217,12 @@ class SliderWithStep {
 class SliderWithAutoTickInterval { }
 
 @Component({
-  template: `<md-slider step="3" tickInterval="6"></md-slider>`,
+  template: `<md-slider step="3" [tickInterval]="tickInterval"></md-slider>`,
   styles: [styles],
 })
-class SliderWithSetTickInterval { }
+class SliderWithSetTickInterval {
+  tickInterval = 6;
+}
 
 @Component({
   template: `<md-slider thumbLabel></md-slider>`,
@@ -1300,8 +1271,8 @@ class SliderWithValueGreaterThanMax { }
   styles: [styles],
 })
 class SliderWithChangeHandler {
-  onChange() { };
-  onInput() { };
+  onChange() { }
+  onInput() { }
 }
 
 @Component({

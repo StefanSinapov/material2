@@ -1,5 +1,5 @@
 import {async, TestBed} from '@angular/core/testing';
-import {Component} from '@angular/core';
+import {Component, QueryList, ViewChildren} from '@angular/core';
 import {By} from '@angular/platform-browser';
 import {MdListItem, MdListModule} from './index';
 
@@ -8,7 +8,7 @@ describe('MdList', () => {
 
   beforeEach(async(() => {
     TestBed.configureTestingModule({
-      imports: [MdListModule.forRoot()],
+      imports: [MdListModule],
       declarations: [
         ListWithOneAnchorItem,
         ListWithOneItem,
@@ -19,6 +19,7 @@ describe('MdList', () => {
         ListWithDynamicNumberOfLines,
         ListWithMultipleItems,
         ListWithManyLines,
+        NavListWithOneAnchorItem,
       ],
     });
 
@@ -27,18 +28,19 @@ describe('MdList', () => {
 
   it('should add and remove focus class on focus/blur', () => {
     let fixture = TestBed.createComponent(ListWithOneAnchorItem);
-    let listItem = fixture.debugElement.query(By.directive(MdListItem));
-    let listItemDiv = fixture.debugElement.query(By.css('.mat-list-item-content'));
     fixture.detectChanges();
-    expect(listItemDiv.nativeElement.classList).not.toContain('mat-list-item-focus');
+    let listItem = fixture.debugElement.query(By.directive(MdListItem));
+    let listItemEl = fixture.debugElement.query(By.css('.mat-list-item'));
+
+    expect(listItemEl.nativeElement.classList).not.toContain('mat-list-item-focus');
 
     listItem.componentInstance._handleFocus();
     fixture.detectChanges();
-    expect(listItemDiv.nativeElement.classList).toContain('mat-list-item-focus');
+    expect(listItemEl.nativeElement.classList).toContain('mat-list-item-focus');
 
     listItem.componentInstance._handleBlur();
     fixture.detectChanges();
-    expect(listItemDiv.nativeElement.classList).not.toContain('mat-list-item-focus');
+    expect(listItemEl.nativeElement.classList).not.toContain('mat-list-item-focus');
   });
 
   it('should not apply any additional class to a list without lines', () => {
@@ -114,6 +116,47 @@ describe('MdList', () => {
     expect(list.nativeElement.getAttribute('role')).toBe('list');
     expect(listItem.nativeElement.getAttribute('role')).toBe('listitem');
   });
+
+  it('should not show ripples for non-nav lists', () => {
+    let fixture = TestBed.createComponent(ListWithOneAnchorItem);
+    fixture.detectChanges();
+
+    const items: QueryList<MdListItem> = fixture.debugElement.componentInstance.listItems;
+    expect(items.length).toBeGreaterThan(0);
+    items.forEach(item => expect(item.isRippleEnabled()).toBe(false));
+  });
+
+  it('should allow disabling ripples for specific nav-list items', () => {
+    let fixture = TestBed.createComponent(NavListWithOneAnchorItem);
+    fixture.detectChanges();
+
+    const items = fixture.componentInstance.listItems;
+    expect(items.length).toBeGreaterThan(0);
+
+    // Ripples should be enabled by default, and can be disabled with a binding.
+    items.forEach(item => expect(item.isRippleEnabled()).toBe(true));
+
+    fixture.componentInstance.disableItemRipple = true;
+    fixture.detectChanges();
+
+    items.forEach(item => expect(item.isRippleEnabled()).toBe(false));
+  });
+
+  it('should allow disabling ripples for the whole nav-list', () => {
+    let fixture = TestBed.createComponent(NavListWithOneAnchorItem);
+    fixture.detectChanges();
+
+    const items = fixture.componentInstance.listItems;
+    expect(items.length).toBeGreaterThan(0);
+
+    // Ripples should be enabled by default, and can be disabled with a binding.
+    items.forEach(item => expect(item.isRippleEnabled()).toBe(true));
+
+    fixture.componentInstance.disableListRipple = true;
+    fixture.detectChanges();
+
+    items.forEach(item => expect(item.isRippleEnabled()).toBe(false));
+  });
 });
 
 
@@ -132,7 +175,23 @@ class BaseTestList {
       Paprika
     </a>
   </md-list>`})
-class ListWithOneAnchorItem extends BaseTestList { }
+class ListWithOneAnchorItem extends BaseTestList {
+  // This needs to be declared directly on the class; if declared on the BaseTestList superclass,
+  // it doesn't get populated.
+  @ViewChildren(MdListItem) listItems: QueryList<MdListItem>;
+}
+
+@Component({template: `
+  <md-nav-list [disableRipple]="disableListRipple">
+    <a md-list-item [disableRipple]="disableItemRipple">
+      Paprika
+    </a>
+  </md-nav-list>`})
+class NavListWithOneAnchorItem extends BaseTestList {
+  @ViewChildren(MdListItem) listItems: QueryList<MdListItem>;
+  disableItemRipple: boolean = false;
+  disableListRipple: boolean = false;
+}
 
 @Component({template: `
   <md-list>

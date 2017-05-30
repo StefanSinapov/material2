@@ -7,21 +7,28 @@ import {
   OnChanges,
   SimpleChanges,
   OnDestroy,
-  OpaqueToken,
+  InjectionToken,
   Optional,
 } from '@angular/core';
 import {RippleConfig, RippleRenderer} from './ripple-renderer';
-import {ViewportRuler} from '../overlay/position/viewport-ruler';
 import {RippleRef} from './ripple-ref';
+import {ViewportRuler} from '../overlay/position/viewport-ruler';
+import {Platform} from '../platform/platform';
 
-/** OpaqueToken that can be used to globally disable all ripples. Except programmatic ones. */
-export const MD_DISABLE_RIPPLES = new OpaqueToken('md-disable-ripples');
+export interface RippleGlobalOptions {
+  disabled?: boolean;
+  baseSpeedFactor?: number;
+}
+
+/** Injection token that can be used to specify the global ripple options. */
+export const MD_RIPPLE_GLOBAL_OPTIONS =
+    new InjectionToken<RippleGlobalOptions>('md-ripple-global-options');
 
 @Directive({
-  selector: '[md-ripple], [mat-ripple]',
+  selector: '[md-ripple], [mat-ripple], [mdRipple], [matRipple]',
   exportAs: 'mdRipple',
   host: {
-    '[class.mat-ripple]': 'true',
+    'class': 'mat-ripple',
     '[class.mat-ripple-unbounded]': 'unbounded'
   }
 })
@@ -70,10 +77,20 @@ export class MdRipple implements OnChanges, OnDestroy {
   /** Renderer for the ripple DOM manipulations. */
   private _rippleRenderer: RippleRenderer;
 
-  constructor(elementRef: ElementRef, ngZone: NgZone, ruler: ViewportRuler,
-              @Optional() @Inject(MD_DISABLE_RIPPLES) private _forceDisableRipples: boolean) {
+  /** Options that are set globally for all ripples. */
+  private _globalOptions: RippleGlobalOptions;
 
-    this._rippleRenderer = new RippleRenderer(elementRef, ngZone, ruler);
+  constructor(
+    elementRef: ElementRef,
+    ngZone: NgZone,
+    ruler: ViewportRuler,
+    platform: Platform,
+    @Optional() @Inject(MD_RIPPLE_GLOBAL_OPTIONS) globalOptions: RippleGlobalOptions
+  ) {
+    this._rippleRenderer = new RippleRenderer(elementRef, ngZone, ruler, platform);
+    this._globalOptions = globalOptions ? globalOptions : {};
+
+    this._updateRippleRenderer();
   }
 
   ngOnChanges(changes: SimpleChanges) {
@@ -81,8 +98,7 @@ export class MdRipple implements OnChanges, OnDestroy {
       this._rippleRenderer.setTriggerElement(this.trigger);
     }
 
-    this._rippleRenderer.rippleDisabled = this._forceDisableRipples || this.disabled;
-    this._rippleRenderer.rippleConfig = this.rippleConfig;
+    this._updateRippleRenderer();
   }
 
   ngOnDestroy() {
@@ -104,9 +120,15 @@ export class MdRipple implements OnChanges, OnDestroy {
   get rippleConfig(): RippleConfig {
     return {
       centered: this.centered,
-      speedFactor: this.speedFactor,
+      speedFactor: this.speedFactor * (this._globalOptions.baseSpeedFactor || 1),
       radius: this.radius,
       color: this.color
     };
+  }
+
+  /** Updates the ripple renderer with the latest ripple configuration. */
+  private _updateRippleRenderer() {
+    this._rippleRenderer.rippleDisabled = this._globalOptions.disabled || this.disabled;
+    this._rippleRenderer.rippleConfig = this.rippleConfig;
   }
 }

@@ -5,24 +5,26 @@
   <div class="mat-radio-container">
     <div class="mat-radio-outer-circle"></div>
     <div class="mat-radio-inner-circle"></div>
-    <div md-ripple *ngIf="!_isRippleDisabled()" class="mat-radio-ripple"
+    <div md-ripple class="mat-radio-ripple"
          [mdRippleTrigger]="label"
+         [mdRippleDisabled]="_isRippleDisabled()"
          [mdRippleCentered]="true"></div>
   </div>
 
   <input #input class="mat-radio-input cdk-visually-hidden" type="radio"
-          [id]="inputId"
-          [checked]="checked"
-          [disabled]="disabled"
-          [name]="name"
-          [attr.aria-label]="ariaLabel"
-          [attr.aria-labelledby]="ariaLabelledby"
-          (change)="_onInputChange($event)"
-          (blur)="_onInputBlur()"
-          (click)="_onInputClick($event)">
+         [id]="inputId"
+         [checked]="checked"
+         [disabled]="disabled"
+         [name]="name"
+         [attr.aria-label]="ariaLabel"
+         [attr.aria-labelledby]="ariaLabelledby"
+         (change)="_onInputChange($event)"
+         (click)="_onInputClick($event)">
 
   <!-- The label content for radio control. -->
   <div class="mat-radio-label-content" [class.mat-radio-label-before]="labelPosition == 'before'">
+    <!-- Add an invisible span so JAWS can read the label -->
+    <span style="display:none">&nbsp;</span>
     <ng-content></ng-content>
   </div>
 </label>

@@ -9,7 +9,8 @@ $mat-button-min-width: 88px !default;
 $mat-button-margin: 0 !default;
 $mat-button-line-height: 36px !default;
 $mat-button-border-radius: 2px !default;
-$mat-button-focus-transition: opacity 200ms $swift-ease-in-out-timing-function !default;
+$mat-button-focus-transition: opacity 200ms $swift-ease-in-out-timing-function,
+                              background-color 200ms $swift-ease-in-out-timing-function !default;
 
 // Icon Button standards
 $mat-icon-button-size: 40px !default;
@@ -55,10 +56,14 @@ $mat-mini-fab-padding: 8px !default;
     cursor: default;
   }
 
-  &.mat-button-focus {
+  &.cdk-keyboard-focused {
     .mat-button-focus-overlay {
       opacity: 1;
     }
+  }
+
+  &::-moz-focus-inner {
+    border: 0;
   }
 }
 

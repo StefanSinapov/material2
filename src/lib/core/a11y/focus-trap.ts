@@ -10,6 +10,7 @@ import {
 import {InteractivityChecker} from './interactivity-checker';
 import {coerceBooleanProperty} from '../coercion/boolean-property';
 
+import 'rxjs/add/operator/first';
 
 /**
  * Class that allows for trapping focus within a DOM element.
@@ -72,14 +73,16 @@ export class FocusTrap {
     }
 
     this._ngZone.runOutsideAngular(() => {
-      this._element
-        .insertAdjacentElement('beforebegin', this._startAnchor)
-        .addEventListener('focus', () => this.focusLastTabbableElement());
+      this._startAnchor.addEventListener('focus', () => this.focusLastTabbableElement());
+      this._endAnchor.addEventListener('focus', () => this.focusFirstTabbableElement());
 
-      this._element
-        .insertAdjacentElement('afterend', this._endAnchor)
-        .addEventListener('focus', () => this.focusFirstTabbableElement());
+      this._element.parentNode.insertBefore(this._startAnchor, this._element);
+      this._element.parentNode.insertBefore(this._endAnchor, this._element.nextSibling);
     });
+  }
+
+  focusInitialElementWhenReady() {
+    this._ngZone.onMicrotaskEmpty.first().subscribe(() => this.focusInitialElement());
   }
 
   /**
@@ -98,11 +101,45 @@ export class FocusTrap {
     this._ngZone.onMicrotaskEmpty.first().subscribe(() => this.focusLastTabbableElement());
   }
 
+  /**
+   * Get the specified boundary element of the trapped region.
+   * @param bound The boundary to get (start or end of trapped region).
+   * @returns The boundary element.
+   */
+  private _getRegionBoundary(bound: 'start' | 'end'): HTMLElement | null {
+    let markers = [
+      ...Array.prototype.slice.call(this._element.querySelectorAll(`[cdk-focus-region-${bound}]`)),
+      // Deprecated version of selector, for temporary backwards comparability:
+      ...Array.prototype.slice.call(this._element.querySelectorAll(`[cdk-focus-${bound}]`)),
+    ];
+
+    markers.forEach((el: HTMLElement) => {
+      if (el.hasAttribute(`cdk-focus-${bound}`)) {
+        console.warn(`Found use of deprecated attribute 'cdk-focus-${bound}',` +
+                     ` use 'cdk-focus-region-${bound}' instead.`, el);
+      }
+    });
+
+    if (bound == 'start') {
+      return markers.length ? markers[0] : this._getFirstTabbableElement(this._element);
+    }
+    return markers.length ?
+        markers[markers.length - 1] : this._getLastTabbableElement(this._element);
+  }
+
+  /** Focuses the element that should be focused when the focus trap is initialized. */
+  focusInitialElement() {
+    let redirectToElement = this._element.querySelector('[cdk-focus-initial]') as HTMLElement;
+    if (redirectToElement) {
+      redirectToElement.focus();
+    } else {
+      this.focusFirstTabbableElement();
+    }
+  }
+
   /** Focuses the first tabbable element within the focus trap region. */
   focusFirstTabbableElement() {
-    let redirectToElement = this._element.querySelector('[cdk-focus-start]') as HTMLElement ||
-                            this._getFirstTabbableElement(this._element);
-
+    let redirectToElement = this._getRegionBoundary('start');
     if (redirectToElement) {
       redirectToElement.focus();
     }
@@ -110,15 +147,7 @@ export class FocusTrap {
 
   /** Focuses the last tabbable element within the focus trap region. */
   focusLastTabbableElement() {
-    let focusTargets = this._element.querySelectorAll('[cdk-focus-end]');
-    let redirectToElement: HTMLElement = null;
-
-    if (focusTargets.length) {
-      redirectToElement = focusTargets[focusTargets.length - 1] as HTMLElement;
-    } else {
-      redirectToElement = this._getLastTabbableElement(this._element);
-    }
-
+    let redirectToElement = this._getRegionBoundary('end');
     if (redirectToElement) {
       redirectToElement.focus();
     }
@@ -130,10 +159,15 @@ export class FocusTrap {
       return root;
     }
 
-    // Iterate in DOM order.
-    let childCount = root.children.length;
-    for (let i = 0; i < childCount; i++) {
-      let tabbableChild = this._getFirstTabbableElement(root.children[i] as HTMLElement);
+    // Iterate in DOM order. Note that IE doesn't have `children` for SVG so we fall
+    // back to `childNodes` which includes text nodes, comments etc.
+    let children = root.children || root.childNodes;
+
+    for (let i = 0; i < children.length; i++) {
+      let tabbableChild = children[i].nodeType === Node.ELEMENT_NODE ?
+        this._getFirstTabbableElement(children[i] as HTMLElement) :
+        null;
+
       if (tabbableChild) {
         return tabbableChild;
       }
@@ -149,8 +183,13 @@ export class FocusTrap {
     }
 
     // Iterate in reverse DOM order.
-    for (let i = root.children.length - 1; i >= 0; i--) {
-      let tabbableChild = this._getLastTabbableElement(root.children[i] as HTMLElement);
+    let children = root.children || root.childNodes;
+
+    for (let i = children.length - 1; i >= 0; i--) {
+      let tabbableChild = children[i].nodeType === Node.ELEMENT_NODE ?
+        this._getLastTabbableElement(children[i] as HTMLElement) :
+        null;
+
       if (tabbableChild) {
         return tabbableChild;
       }
@@ -214,7 +253,8 @@ export class FocusTrapDeprecatedDirective implements OnDestroy, AfterContentInit
 
 /** Directive for trapping focus within a region. */
 @Directive({
-  selector: '[cdkTrapFocus]'
+  selector: '[cdkTrapFocus]',
+  exportAs: 'cdkTrapFocus',
 })
 export class FocusTrapDirective implements OnDestroy, AfterContentInit {
   focusTrap: FocusTrap;

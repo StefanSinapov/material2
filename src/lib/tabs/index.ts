@@ -1,4 +1,4 @@
-import {NgModule, ModuleWithProviders} from '@angular/core';
+import {NgModule} from '@angular/core';
 import {CommonModule} from '@angular/common';
 import {PortalModule} from '../core';
 import {MdRippleModule} from '../core/ripple/index';
@@ -12,26 +12,41 @@ import {MdInkBar} from './ink-bar';
 import {MdTabBody} from './tab-body';
 import {VIEWPORT_RULER_PROVIDER} from '../core/overlay/position/viewport-ruler';
 import {MdTabHeader} from './tab-header';
-import {SCROLL_DISPATCHER_PROVIDER} from '../core/overlay/scroll/scroll-dispatcher';
+import {ScrollDispatchModule} from '../core/overlay/scroll/index';
 
 
 @NgModule({
-  imports: [CommonModule, PortalModule, MdRippleModule, ObserveContentModule],
+  imports: [
+    CommonModule,
+    PortalModule,
+    MdRippleModule,
+    ObserveContentModule,
+    ScrollDispatchModule,
+  ],
   // Don't export all components because some are only to be used internally.
-  exports: [MdTabGroup, MdTabLabel, MdTab, MdTabNavBar, MdTabLink, MdTabLinkRipple],
-  declarations: [MdTabGroup, MdTabLabel, MdTab, MdInkBar, MdTabLabelWrapper,
-    MdTabNavBar, MdTabLink, MdTabBody, MdTabLinkRipple, MdTabHeader],
-  providers: [VIEWPORT_RULER_PROVIDER, SCROLL_DISPATCHER_PROVIDER],
+  exports: [
+    MdTabGroup,
+    MdTabLabel,
+    MdTab,
+    MdTabNavBar,
+    MdTabLink,
+    MdTabLinkRipple
+  ],
+  declarations: [
+    MdTabGroup,
+    MdTabLabel,
+    MdTab,
+    MdInkBar,
+    MdTabLabelWrapper,
+    MdTabNavBar,
+    MdTabLink,
+    MdTabBody,
+    MdTabLinkRipple,
+    MdTabHeader
+  ],
+  providers: [VIEWPORT_RULER_PROVIDER],
 })
-export class MdTabsModule {
-  /** @deprecated */
-  static forRoot(): ModuleWithProviders {
-    return {
-      ngModule: MdTabsModule,
-      providers: []
-    };
-  }
-}
+export class MdTabsModule {}
 
 
 export * from './tab-group';
